@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+
+members = ["state", "state_commitment", "execution", "example", "state_management", "zk", "api", "validator"]
+
+exclude = ["trollup-initialize-programs"]

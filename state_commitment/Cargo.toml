@@ -1,0 +1,36 @@
+[package]
+name = "state_commitment"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+solana-client = "=2.0.5"
+solana-sdk = "=2.0.5"
+solana-transaction-status = "=2.0.5"
+ark-serialize = {version = "0.4.2", features = ["std"]}
+ark-bn254 = "0.4.0"
+ark-groth16 = "0.4.0"
+hex = "0.4.3"
+sha2 = "0.10.8"
+borsh = {version = "1.2.1", features = ["derive"]}
+rs_merkle = "1.4.2"
+trollup-zk = {path = "../zk"}
+state = {path = "../state" }
+state_management = {path = "../state_management" }
+rand = "0.8.5"
+libsecp256k1 = "0.7.1"
+reqwest = "0.11.27"
+serde = { version = "1.0.209", features = ["derive"] }
+anyhow = "1.0.86"
+tokio = "1.40.0"
+base64 = "0.21.7"
+log = "0.4.22"
+serde_json = "1.0.128"
+tokio-tungstenite = "0.20.1"
+tungstenite = "0.20.1"
+futures-util = "0.3.30"
+url = "2.5.2"
+lazy_static = "1.5.0"
+
+[lib]
+doctest = false

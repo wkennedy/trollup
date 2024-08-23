@@ -1,0 +1,16 @@
+[package]
+name = "trollup-proof-verifier"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+solana-program = "=2.0.8"
+anyhow = "1.0.87"
+thiserror = "1.0.63"
+sha2 = "0.10.8"
+borsh = { version = "1.5.1", features = ["derive"] }
+
+[lib]
+crate-type = ["cdylib", "lib"]
