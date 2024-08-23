@@ -1,0 +1,12 @@
+[package]
+name = "execution"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+solana-program = "1.18.22"
+sled = "0.34"
+borsh = {version = "1.2.1", features = ["derive"]}
+state = {path = "../state"}
+state_commitment = {path = "../state_commitment"}
+state_management = {path = "../state_management" }

@@ -1,0 +1,13 @@
+[package]
+name = "trollup-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+solana-program = "1.18.22"
+tokio = "1.39.3"
+state = {path = "../state" }
+merkle = {path = "../merkle"}
+state_commitment = {path = "../state_commitment"}
+state_management = {path = "../state_management"}
+execution = {path = "../execution"}

@@ -1,0 +1,13 @@
+[package]
+name = "state"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+solana-program = "1.18.22"
+borsh = {version = "1.2.1", features = ["derive"]}
+sha2 = "0.10.8"
+rand = "0.7.3"
+libsecp256k1 = "0.7.1"
