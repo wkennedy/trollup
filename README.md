@@ -1,17 +1,16 @@
 # trollup
 
-This is my first attempt at creating a bare bones zk-rollup for Solana. There is a lot of ideas that are new to me,
-so this is merely a representation of attempting to learn about ZK, Merkle structures and transaction processing.
+This is my first attempt at creating a bare bones zk-rollup for Solana. There are a lot of ideas that are new to me,
+so this is merely a representation of my attempt to learn about ZK, Merkle structures and transaction processing.
 
 The basic idea that I'm playing around with in this example is a hybrid approach to ZK proof verification in Solana to reduce CU and cost.
 
 ### **Overview:**
 
-- ZK proof verification happens off-chain, avoiding Solana's computational limits.
-- Only a commitment to the proof and its verification result is sent on-chain.
+- ZK proof verification happens off-chain, reducing CU.
+- Only a commitment to the proof and its verification result is sent to Solana.
 - The on-chain program performs a simpler verification of the commitment.
 - This approach trades some decentralization for scalability, as it relies on off-chain verifiers.
-
 
 Off-chain Verification - Complex ZK proof verification happens off-chain:
 
