@@ -14,3 +14,6 @@ state_management = {path = "../state_management" }
 merkle = {path = "../merkle"}
 rand = "0.7.3"
 libsecp256k1 = "0.7.1"
+
+[lib]
+doctest = false

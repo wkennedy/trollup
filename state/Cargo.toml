@@ -11,3 +11,6 @@ borsh = {version = "1.2.1", features = ["derive"]}
 sha2 = "0.10.8"
 rand = "0.7.3"
 libsecp256k1 = "0.7.1"
+
+[lib]
+doctest = false

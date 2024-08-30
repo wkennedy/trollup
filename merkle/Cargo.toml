@@ -9,3 +9,6 @@ edition = "2021"
 sha2 = "0.10.8"
 borsh = {version = "1.2.1", features = ["derive"]}
 state = {path = "../state" }
+
+[lib]
+doctest = false

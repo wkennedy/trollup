@@ -9,3 +9,6 @@ edition = "2021"
 sled = "0.34"
 borsh = {version = "1.2.1", features = ["derive"]}
 state = {path = "../state"}
+
+[lib]
+doctest = false
