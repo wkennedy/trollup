@@ -1,5 +1,7 @@
 # trollup
 
+[![Rust](https://github.com/wkennedy/trollup/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/wkennedy/trollup/actions/workflows/rust.yml)
+
 This is my first attempt at creating a bare bones zk-rollup for Solana. There is a lot of ideas that are new to me,
 so this is merely a representation of attempting to learn about ZK, Merkle structures and transaction processing.
 
