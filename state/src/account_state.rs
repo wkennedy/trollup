@@ -11,7 +11,7 @@ pub struct AccountState {
 }
 
 impl StateRecord for AccountState {
-    fn get_key(&self) -> &[u8] {
-        self.address.as_ref()
+    fn get_key(&self) -> Option<[u8; 32]> {
+        Some(self.address.to_bytes())
     }
 }

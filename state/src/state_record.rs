@@ -6,13 +6,13 @@ use sha2::{Digest, Sha256};
 /// associated with the state record. A state record is a struct that will be used in a key value
 /// store.
 pub trait StateRecord: BorshSerialize + BorshDeserialize + Clone {
-    fn get_key(&self) -> &[u8];
+    fn get_key(&self) -> Option<[u8; 32]>;
 }
 
 /// NOTE: This is not a real proof system, this is just for learning purposes.
 /// ZkProof struct represents a zero-knowledge proof.
 /// It is used to store the Merkle root and the number of state records.
-#[derive(Debug, BorshDeserialize, BorshSerialize, Clone)]
+#[derive(Debug, BorshDeserialize, BorshSerialize, Clone, Default)]
 pub struct ZkProof {
     pub merkle_root: [u8; 32],
     pub state_record_count: u64,

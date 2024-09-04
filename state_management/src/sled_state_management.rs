@@ -14,6 +14,7 @@ use crate::state_management::ManageState;
 ///
 /// - `db`: The instance of Sled database.
 /// - `_marker`: A marker field used to specify the type of state record stored in the database.
+#[derive(Debug, Clone)]
 pub struct SledStateManagement<S: StateRecord> {
     db: Db,
     _marker: PhantomData<S>,
@@ -44,16 +45,16 @@ impl<S: StateRecord> ManageState for SledStateManagement<S> {
         self.db.insert(key, serialized).expect("Failed to insert account state");
     }
 
-    fn set_latest_block(&self, value: Vec<u8>) {
+    fn set_latest_block_id(&self, value: &[u8; 32]) {
         self.db.insert("LATEST_BLOCK", value).expect("Failed to insert LATEST_BLOCK key");
     }
 
-    fn get_latest_block(&self) -> Option<String> {
+    fn get_latest_block_id(&self) -> Option<[u8; 32]> {
         self.db
             .get("LATEST_BLOCK")
             .ok()
             .flatten()
-            .and_then(|ivec| from_slice::<String>(&ivec).ok())
+            .and_then(|ivec| from_slice::<[u8; 32]>(&ivec).ok())
     }
 
     fn commit(&self) {

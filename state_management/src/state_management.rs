@@ -7,8 +7,8 @@ pub trait ManageState {
     fn new(path: &str) -> Self;
     fn get_state_record(&self, key: &[u8]) -> Option<Self::Record>;
     fn set_state_record(&self, key: &[u8], state: Self::Record);
-    fn set_latest_block(&self, value: Vec<u8>);
-    fn get_latest_block(&self) -> Option<String>;
+    fn set_latest_block_id(&self, value: &[u8; 32]);
+    fn get_latest_block_id(&self) -> Option<[u8; 32]>;
     fn commit(&self);
 }
 
@@ -35,6 +35,8 @@ pub trait ManageState {
 /// # Generic Parameters
 ///
 /// - `T`: The type that implements the `ManageState` trait for state management.
+///
+#[derive(Debug, Clone)]
 pub struct StateManager<T: ManageState> {
     pub manage_state: T,
 }
@@ -46,19 +48,19 @@ impl<T: ManageState> StateManager<T> {
         }
     }
 
-    pub fn get_state_record(&self, key: &[u8]) -> Option<T::Record> {
+    pub fn get_state_record(&self, key: &[u8; 32]) -> Option<T::Record> {
         self.manage_state.get_state_record(key)
     }
 
-    pub fn get_latest_block(&self) -> Option<String> {
-        self.manage_state.get_latest_block()
+    pub fn get_latest_block_id(&self) -> Option<[u8; 32]> {
+        self.manage_state.get_latest_block_id()
     }
 
-    pub fn set_latest_block(&self, key: &[u8]) {
-        self.manage_state.set_latest_block(key.to_vec());
+    pub fn set_latest_block_id(&self, key: &[u8; 32]) {
+        self.manage_state.set_latest_block_id(key);
     }
 
-    pub fn set_state_record(&self, key: &[u8], state: T::Record) {
+    pub fn set_state_record(&self, key: &[u8; 32], state: T::Record) {
         self.manage_state.set_state_record(key, state)
     }
 

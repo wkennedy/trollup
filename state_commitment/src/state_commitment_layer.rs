@@ -46,18 +46,18 @@ use libsecp256k1::{Message, PublicKey, SecretKey};
 /// };
 /// ```
 pub struct StateCommitmentLayer<T: StateRecord> {
-    state: HashMap<Vec<u8>, T>,
+    state: HashMap<[u8; 32], T>,
     merkle_tree: MerkleTree<T>,
 }
 
 impl<T: StateRecord> StateCommitmentLayer<T> {
     pub fn new(state_records: Vec<T>) -> Self {
-        let records_map = state_records.iter().map(|a| (a.get_key().to_vec(), a.clone())).collect();
+        let records_map = state_records.iter().map(|a| (a.get_key().unwrap(), a.clone())).collect();
         let merkle_tree = MerkleTree::new(state_records);
         StateCommitmentLayer { state: records_map, merkle_tree }
     }
 
-    pub fn get_state_root(&self) -> Option<&[u8]> {
+    pub fn get_state_root(&self) -> Option<[u8; 32]> {
         self.merkle_tree.root_hash()
     }
 
@@ -68,9 +68,15 @@ impl<T: StateRecord> StateCommitmentLayer<T> {
     }
 
     pub fn update_record(&mut self, state_record: T) {
-        self.state.insert((*state_record.get_key()).to_owned(), state_record.clone());
-        let records: Vec<_> = self.state.values().cloned().collect();
-        self.merkle_tree = MerkleTree::new(records);
+        match state_record.get_key() {
+            None => {}
+            Some(key) => {
+                self.state.insert(key, state_record.clone());
+                let records: Vec<_> = self.state.values().cloned().collect();
+                self.merkle_tree = MerkleTree::new(records);
+            }
+        }
+
     }
 
     /// Verifies the ZK proof and signs the commitment.

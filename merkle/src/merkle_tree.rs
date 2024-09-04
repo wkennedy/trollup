@@ -1,6 +1,6 @@
 use crate::merkle_proof::MerkleProof;
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
-use sha2::{Digest, Sha256};
+use sha2::{Digest, Sha256, Sha256VarCore};
 use state::state_record::StateRecord;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -21,14 +21,14 @@ impl<T: StateRecord> Clone for MerkleTree<T> {
 }
 
 impl<T: StateRecord> StateRecord for MerkleTree<T> {
-    fn get_key(&self) -> &[u8] {
-        self.root_hash().unwrap_or(&[])
+    fn get_key(&self) -> Option<[u8; 32]> {
+        self.root_hash()
     }
 }
 
 #[derive(Debug, BorshSerialize, BorshDeserialize)]
 struct Node<T: StateRecord> {
-    hash: Vec<u8>,
+    hash: [u8; 32],
     left: Option<Box<Node<T>>>,
     right: Option<Box<Node<T>>>,
     _marker: PhantomData<T>,
@@ -100,8 +100,8 @@ impl<T: StateRecord> MerkleTree<T> {
         self.root = Self::build_tree(&self.leaves);
     }
 
-    pub fn root_hash(&self) -> Option<&[u8]> {
-        self.root.as_ref().map(|node| node.hash.deref())
+    pub fn root_hash(&self) -> Option<[u8; 32]> {
+        self.root.as_ref().map(|node| node.hash)
     }
 
     //When generating the proof, we need to ensure that we correctly identify and store the sibling nodes. The sibling should be recorded in a consistent left-to-right order.
@@ -113,7 +113,7 @@ impl<T: StateRecord> MerkleTree<T> {
     fn generate_proof_recursive(
         &self,
         node: &Option<Node<T>>,
-        target_hash: &Vec<u8>,
+        target_hash: &[u8; 32],
     ) -> Option<MerkleProof> {
         if let Some(node) = node {
             if node.hash == *target_hash {
@@ -149,7 +149,7 @@ impl<T: StateRecord> MerkleTree<T> {
 impl<T: StateRecord> Node<T> {
     fn new_leaf(state: &T) -> Self {
         let serialized = to_vec(state).unwrap();
-        let hash = Sha256::digest(&serialized).to_vec();
+        let hash: [u8; 32] = Sha256::digest(&serialized).into();
 
         Node::<T> {
             hash,
@@ -163,7 +163,7 @@ impl<T: StateRecord> Node<T> {
         let mut hasher = Sha256::new();
         hasher.update(&left.hash);
         hasher.update(&right.hash);
-        let hash = hasher.finalize().to_vec();
+        let hash: [u8; 32] = hasher.finalize().into();
 
         Node::<T> {
             hash,
@@ -173,9 +173,9 @@ impl<T: StateRecord> Node<T> {
         }
     }
 
-    fn hash_account(state: &T) -> Vec<u8> {
+    fn hash_account(state: &T) -> [u8; 32] {
         let serialized = to_vec(state).unwrap();
-        Sha256::digest(&serialized).to_vec()
+        Sha256::digest(&serialized).into()
     }
 }
 

@@ -6,7 +6,7 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-solana-program = "1.18.22"
+solana-program = "2.0.8"
 sha2 = "0.10.8"
 borsh = {version = "1.2.1", features = ["derive"]}
 rand = "0.8.5"

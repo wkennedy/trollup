@@ -34,7 +34,7 @@ impl Transaction {
 }
 
 impl StateRecord for Transaction {
-    fn get_key(&self) -> &[u8] {
-        self.id.as_ref()
+    fn get_key(&self) -> Option<[u8; 32]> {
+        Some(self.id.to_bytes())
     }
 }

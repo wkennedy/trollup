@@ -8,6 +8,13 @@ use state_commitment::state_commitment_layer::StateCommitmentLayer;
 use state_management::state_management::{ManageState, StateManager};
 use crate::transaction_pool::TransactionPool;
 
+#[derive(PartialEq, Eq, Debug)]
+enum EngineState {
+    Running,
+    Stopped,
+    Initialized
+}
+
 /// This struct represents an execution engine for managing the state of accounts, transactions, and blocks.
 ///
 /// # Generic Parameters
@@ -28,6 +35,7 @@ pub struct ExecutionEngine<'a, A: ManageState<Record=AccountState>, T: ManageSta
     transaction_pool: TransactionPool<'a, T>,
     account_state_commitment: StateCommitmentLayer<AccountState>,
     transaction_state_commitment: StateCommitmentLayer<Transaction>,
+    engine_state: EngineState
 }
 
 impl<'a, A: ManageState<Record=AccountState>, T: ManageState<Record=Transaction>, B: ManageState<Record=Block>> ExecutionEngine<'a, A, T, B> {
@@ -38,6 +46,7 @@ impl<'a, A: ManageState<Record=AccountState>, T: ManageState<Record=Transaction>
             transaction_pool,
             account_state_commitment: StateCommitmentLayer::<AccountState>::new(vec![]),
             transaction_state_commitment: StateCommitmentLayer::<Transaction>::new(vec![]),
+            engine_state: EngineState::Initialized,
         }
     }
 
@@ -78,21 +87,32 @@ impl<'a, A: ManageState<Record=AccountState>, T: ManageState<Record=Transaction>
     /// # }
     /// ```
     pub async fn start(&mut self) {
+        self.engine_state = EngineState::Running;
         loop {
-            if self.transaction_pool.pool_size() >= 4 {
-                self.execute_block().await;
-            } else {
-                //TODO Add function to stop loop
+            if self.engine_state == EngineState::Stopped {
+                println!("Engine stopped.");
                 break;
+            } else {
+                self.execute_block().await;
             }
         }
+    }
+
+    pub async fn stop(&mut self) {
+        println!("Stopping Engine");
+        self.engine_state = EngineState::Stopped;
     }
 
     /// Executes a block by processing a set of transactions.
     pub async fn execute_block(&mut self) {
         let transactions = &mut self.transaction_pool.get_next_transactions(4);
-        let latest_block_id = self.account_state_management.get_latest_block().unwrap_or("BLOCK_0".to_string());
-        let latest_block_number = u64::from_str(latest_block_id.split('_').last().unwrap_or("0")).unwrap_or(0) + 1;
+        if transactions.is_empty() {
+            return
+        }
+
+        let latest_block_id = self.block_state_management.get_latest_block_id().unwrap_or(Block::get_id(0));
+        let latest_block = self.block_state_management.get_state_record(&latest_block_id).unwrap_or(Block::default());
+        let next_block_number = latest_block.block_number + 1;
         let mut accounts = Vec::new();
         let mut transaction_ids = Vec::with_capacity(transactions.len());
         let transactions_zk_gen = state_record::ZkProofSystem::<Transaction>::new(transactions.clone());
@@ -116,10 +136,10 @@ impl<'a, A: ManageState<Record=AccountState>, T: ManageState<Record=Transaction>
         let account_state_root = self.account_state_commitment.get_state_root().expect("Error getting account state root");
         let transaction_state_root = self.transaction_state_commitment.get_state_root().expect("Error getting transaction state root");
 
-        let block = Block::new(latest_block_number, Box::from(transaction_state_root), tx_zk_proof.clone(),  Box::from(account_state_root), accounts_zk_proof.clone(), transaction_ids, accounts);
+        let block = Block::new(next_block_number, Box::from(transaction_state_root), tx_zk_proof.clone(),  Box::from(account_state_root), accounts_zk_proof.clone(), transaction_ids, accounts);
         println!("Saving latest block: {:?}", &block.get_key());
-        self.block_state_management.set_latest_block(&block.get_key());
-        self.block_state_management.set_state_record(&block.get_key(), block.clone());
+        self.block_state_management.set_latest_block_id(&block.get_key().unwrap());
+        self.block_state_management.set_state_record(&block.get_key().unwrap(), block.clone());
         self.block_state_management.commit();
         self.account_state_commitment.commit_to_l1(&accounts_zk_proof).await;
     }
@@ -138,7 +158,7 @@ impl<'a, A: ManageState<Record=AccountState>, T: ManageState<Record=Transaction>
     pub fn execute_transaction(&mut self, tx: &Transaction) -> Result<AccountState, String> {
         let mut account_state = self
             .account_state_management
-            .get_state_record(&tx.account.as_ref()).unwrap_or_else(|| AccountState {
+            .get_state_record(&tx.account.to_bytes()).unwrap_or_else(|| AccountState {
             address: tx.account,
             balance: 0,
             nonce: 0,
@@ -152,7 +172,7 @@ impl<'a, A: ManageState<Record=AccountState>, T: ManageState<Record=Transaction>
         account_state.balance = tx.balance;
 
         println!("Account updated: {:?}", &account_state);
-        self.account_state_management.set_state_record(&tx.account.as_ref(), account_state.clone());
+        self.account_state_management.set_state_record(&tx.account.to_bytes(), account_state.clone());
         self.account_state_commitment.update_record(account_state.clone());
 
         Ok(account_state)
