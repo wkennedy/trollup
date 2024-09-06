@@ -139,7 +139,7 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>> Exec
 
         let successful_outcomes = extract_successful_transactions(&tx_map, &loaded_txs, &exec_results);
 
-        let mut successful_txs: Vec<TrollupTransaction> = Vec::new();
+        let successful_txs: Vec<TrollupTransaction> = Vec::new();
         let mut transaction_ids = Vec::with_capacity(successful_outcomes.len());
         let mut account_states: Vec<AccountState> = Vec::new();
         for outcome in successful_outcomes {
@@ -209,7 +209,7 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>> Exec
 
         let account_loader = TrollupAccountLoader::new(self.account_state_management);
 
-        let (processor, fork_graph) =
+        let (processor, _fork_graph) =
             create_transaction_batch_processor(&account_loader, &feature_set, &compute_budget);
 
         let processing_environment = TransactionProcessingEnvironment {
@@ -265,7 +265,7 @@ fn extract_successful_transactions(
 ) -> Vec<ExecutionOutcome> {
 
     let mut execution_outcomes = Vec::new();
-    for (i, (key, value)) in tx_map.iter().enumerate() {
+    for (i, (_key, value)) in tx_map.iter().enumerate() {
         let loaded_tx = &loaded_txs[i].clone().unwrap();
         let x1 = &exec_results[i];
         match x1 {
