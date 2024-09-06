@@ -51,8 +51,8 @@ impl<S: StateRecord> ZkProofSystem<S> {
         let mut hasher = Sha256::new();
 
         // Hash all transactions
-        for tx in &self.state_records {
-            let tx_bytes = borsh::to_vec(&tx).unwrap();
+        for record in &self.state_records {
+            let tx_bytes = borsh::to_vec(&record).unwrap();
             hasher.update(&tx_bytes);
         }
 

@@ -6,9 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+solana-sdk = "=2.0.5"
+solana-svm = "=2.0.5"
+solana-client = "=2.0.5"
 sled = "0.34"
 borsh = {version = "1.2.1", features = ["derive"]}
 state = {path = "../state"}
+log = "0.4.22"
 
 [lib]
 doctest = false

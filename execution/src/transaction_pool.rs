@@ -1,7 +1,6 @@
+use state_management::state_management::ManageState;
 use std::collections::VecDeque;
-use state::state_record::StateRecord;
-use state::transaction::Transaction;
-use state_management::state_management::{ManageState, StateManager};
+use state::transaction::TrollupTransaction;
 
 /// TransactionPool is a struct that represents a pool of transactions.
 ///
@@ -19,30 +18,22 @@ use state_management::state_management::{ManageState, StateManager};
 /// - `pool`: A VecDeque that stores the transactions.
 /// - `state_management`: A reference to the StateManager that manages the state of the transactions.
 #[derive(Debug, Clone)]
-pub struct TransactionPool<'a, M: ManageState<Record = Transaction>> {
-    pool: VecDeque<Transaction>,
-    state_management: &'a StateManager<M>,
+pub struct TransactionPool {
+    pool: VecDeque<TrollupTransaction>,
 }
 
-impl<'a, M: ManageState<Record = Transaction>> TransactionPool<'a, M> {
-    pub fn new(state_management: &'a StateManager<M>) -> Self {
+impl TransactionPool {
+    pub fn new() -> Self {
         Self {
-            state_management,
             pool: VecDeque::new()
         }
     }
 
-    pub fn add_transaction(&mut self, tx: Transaction) {
-        match tx.get_key() {
-            None => {}
-            Some(key) => {
-                self.state_management.set_state_record(&key, tx.clone());
-                self.pool.push_back(tx);}
-        }
-
+    pub fn add_transaction(&mut self, tx: TrollupTransaction) {
+        self.pool.push_back(tx);
     }
 
-    pub fn get_next_transaction(&mut self) -> Option<Transaction> {
+    pub fn get_next_transaction(&mut self) -> Option<TrollupTransaction> {
         self.pool.pop_front()
     }
 
@@ -50,7 +41,7 @@ impl<'a, M: ManageState<Record = Transaction>> TransactionPool<'a, M> {
         self.pool.len()
     }
 
-    pub fn get_next_transactions(&mut self, chunk: u32) -> Vec<Transaction> {
+    pub fn get_next_transactions(&mut self, chunk: u32) -> Vec<TrollupTransaction> {
         let mut transactions = Vec::new();
         if self.pool_size() == 0 {
             return vec![]
