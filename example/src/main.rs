@@ -17,12 +17,6 @@ use state_management::state_management::StateManager;
 
 #[tokio::main]
 async fn main() {
-    #[rustfmt::skip]
-        solana_logger::setup_with_default(
-            "solana_rbpf::vm=debug,\
-             solana_runtime::message_processor=debug,\
-             solana_runtime::system_instruction_processor=trace",
-        );
     // let pub1 = Pubkey::new_unique();
     // let pub2 = Pubkey::new_unique();
     // let pub3 = Pubkey::new_unique();

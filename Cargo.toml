@@ -2,5 +2,5 @@
 resolver = "2"
 
 members = [
-    "state", "merkle", "state_commitment", "execution", "example", "state_management", "data_availability", "api"]
+    "state", "merkle", "state_commitment", "execution", "example", "state_management", "api"]
 
