@@ -1,8 +1,5 @@
 //! A helper to initialize Solana SVM API's `TransactionBatchProcessor`.
 
-use solana_program_runtime::loaded_programs::{ProgramCache, ProgramRuntimeEnvironment};
-use solana_rbpf::program::BuiltinProgram;
-
 use {
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
     solana_compute_budget::compute_budget::ComputeBudget,
@@ -125,20 +122,4 @@ pub(crate) fn get_transaction_check_results(
         });
         len
     ]
-}
-
-
-static MOCK_ENVIRONMENT: std::sync::OnceLock<ProgramRuntimeEnvironment> =
-    std::sync::OnceLock::<ProgramRuntimeEnvironment>::new();
-
-fn get_mock_env() -> ProgramRuntimeEnvironment {
-    MOCK_ENVIRONMENT
-        .get_or_init(|| Arc::new(BuiltinProgram::new_mock()))
-        .clone()
-}
-
-fn new_mock_cache<FG: ForkGraph>() -> ProgramCache<FG> {
-    let mut cache = ProgramCache::new(0, 0);
-    cache.environments.program_runtime_v1 = get_mock_env();
-    cache
 }
