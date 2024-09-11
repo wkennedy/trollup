@@ -34,7 +34,7 @@ pub async fn get_transaction_handler(signature: String) -> Result<impl Reply> {
     responses(
 (status = 200, description = "Transaction submitted successful")),
 )]
-pub async fn send_transaction_handler() -> Result<impl Reply> {
+pub async fn send_transaction_handler(transaction: TrollupTransaction) -> Result<impl Reply> {
     // println!("result {:?}", &result);
     Ok(json(&""))
 }
