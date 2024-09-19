@@ -2,5 +2,5 @@
 resolver = "2"
 
 members = [
-    "state", "merkle", "state_commitment", "execution", "example", "state_management", "api", "trollup-solana-programs/on-chain-program-example", "validator", "zk"]
+    "state", "merkle", "state_commitment", "execution", "example", "state_management", "api", "validator", "zk"]
 
