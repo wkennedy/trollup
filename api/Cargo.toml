@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+solana-sdk = "=2.0.5"
 anyhow = "1.0.86"
 log = "0.4.22"
 tokio = { version = "1.40.0", features = ["macros", "sync", "rt-multi-thread"] }
@@ -18,3 +19,5 @@ utoipa-swagger-ui = "4.0.0"
 utoipa-gen = "4.0.0"
 lazy_static = "1.5.0"
 state = {path = "../state"}
+state_management = {path = "../state_management" }
+execution = {path = "../execution"}

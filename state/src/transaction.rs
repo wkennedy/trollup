@@ -165,6 +165,41 @@ pub fn convert_to_solana_transaction(tx: TrollupTransaction) -> Result<Transacti
     })
 }
 
+pub fn convert_to_trollup_transaction(tx: Transaction) -> Result<TrollupTransaction, Box<dyn std::error::Error>> {
+    // Convert signatures
+    // let sig_bytes: [u8; 64] = sig.clone().into();
+
+    let signatures: Vec<[u8; 64]> = tx.signatures
+        .into_iter()
+        .map(|sig| sig.into())
+        .collect();
+
+    // Convert message
+    let message = TrollupMessage {
+        header: [tx.message.header.num_required_signatures, tx.message.header.num_readonly_signed_accounts, tx.message.header.num_readonly_unsigned_accounts],
+        account_keys: tx.message.account_keys
+            .into_iter()
+            .map(|account_key|account_key.to_bytes())
+            .collect(),
+        recent_blockhash: tx.message.recent_blockhash.to_bytes(),
+        instructions: tx.message.instructions
+            .into_iter()
+            .map(|ix| TrollupCompileInstruction {
+                program_id_index: ix.program_id_index,
+                accounts: ix.accounts,
+                data: ix.data,
+            })
+            .collect(),
+    };
+
+    // Create and return the Solana Transaction
+    Ok(TrollupTransaction {
+        optimistic: false,
+        signatures,
+        message,
+    })
+}
+
 pub fn convert_to_sanitized_transaction(tx: &TrollupTransaction) -> solana_sdk::transaction::Result<SanitizedTransaction> {
     let transaction = convert_to_solana_transaction(tx.clone()).expect("Error converting TrollupTransaction to Solana Transaction");
     SanitizedTransaction::try_from_legacy_transaction(transaction, &HashSet::new())

@@ -13,8 +13,13 @@ use solana_sdk::{
 use borsh::{to_vec};
 use libsecp256k1::{Message, PublicKey, SecretKey};
 use sha2::Sha256;
+use solana_sdk::alt_bn128::AltBn128Error;
+use solana_sdk::program_error::ProgramError;
 use trollup_zk::prove::{ProofPackage, ProofPackagePrepared};
 use trollup_zk::verify::{verify_prepared_proof_package, verify_proof_package};
+use crate::error::ValidationError;
+use crate::error::ValidationError::ProofVerificationFailed;
+use crate::error::ValidationError::CommitmentTransactionFailed;
 
 fn create_and_sign_commmitment(
     proof_hash: [u8; 32],
@@ -40,7 +45,7 @@ fn create_and_sign_commmitment(
 
     Ok(ZkProofCommitment {
         proof_hash: proof_hash,
-        new_state_root,
+        new_state_root: new_state_root,
         timestamp,
         verifier_signature: combined_signature,
         public_key,
@@ -48,7 +53,7 @@ fn create_and_sign_commmitment(
 }
 
 
-pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new_state_root: [u8; 32]) {
+pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new_state_root: [u8; 32]) -> Result<bool, ValidationError> {
     // Connect to the Solana localnet
     let rpc_url = "http://127.0.0.1:8899".to_string();
     let client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::confirmed());
@@ -57,14 +62,14 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
     let is_valid = verify_proof_package(&proof_package);
 
     if !is_valid {
-        // TODO return proof invalid, return don't finalize commit
-        return
+        return Err(ProofVerificationFailed);
     }
 
     let proof = proof_package.proof;
     let hash: [u8; 32] = proof.hash::<Sha256>().into();
 
     // Load your Solana wallet keypair
+    // TODO remove airdrop
     let payer = Keypair::new();
     let airdrop_amount = 1_000_000_000; // 1 SOL in lamports
     match request_airdrop(&client, &payer.pubkey(), airdrop_amount).await {
@@ -125,8 +130,14 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
 
     // Send and confirm transaction
     match client.send_and_confirm_transaction(&transaction).await {
-        Ok(signature) => println!("Transaction sent successfully. Signature: {}", signature),
-        Err(err) => println!("Error sending transaction: {}", err),
+        Ok(signature) => {
+            println!("Transaction succeeded: {:?}", &signature);
+            Ok(true)
+        }
+        Err(err) => {
+            println!("Error sending transaction: {}", err);
+            Err(CommitmentTransactionFailed)
+        }
     }
 }
 

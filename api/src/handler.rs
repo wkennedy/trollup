@@ -1,13 +1,15 @@
 use lazy_static::lazy_static;
-use warp::{http::StatusCode, reply::json, Reply};
+use solana_sdk::transaction::Transaction;
+use warp::{http::StatusCode, reply::json, Rejection, Reply};
 use warp::reply::Json;
+use state::transaction::TrollupTransaction;
 // use crate::config::Config;
-
-use crate::Result;
 
 // lazy_static! {
 //     static ref CONFIG: Config = Config::build().unwrap();
 // }
+
+type Result<T> = std::result::Result<T, Rejection>;
 
 #[utoipa::path(
     get,
@@ -34,7 +36,7 @@ pub async fn get_transaction_handler(signature: String) -> Result<impl Reply> {
     responses(
 (status = 200, description = "Transaction submitted successful")),
 )]
-pub async fn send_transaction_handler(transaction: TrollupTransaction) -> Result<impl Reply> {
+pub async fn send_transaction_handler(transaction: Transaction) -> Result<impl Reply> {
     // println!("result {:?}", &result);
     Ok(json(&""))
 }

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use solana_program::hash::Hash;
@@ -139,15 +139,19 @@ async fn main() {
 
         //Create the transaction pool and add the transactions.
         //In a full implementation of this rollup, this would already be created and messages would be pushed into the pool from an HTTP API or other method.
-        let mut transaction_pool = TransactionPool::new();
-        transaction_pool.add_transaction(trollup_tx);
+        let mut transaction_pool = Arc::new(Mutex::new(TransactionPool::new()));
+        let mut tx_pool = transaction_pool.lock().unwrap();
+        tx_pool.add_transaction(trollup_tx);
+        drop(tx_pool);
         // transaction_pool.add_transaction(transaction2);
         // transaction_pool.add_transaction(transaction3);
         // transaction_pool.add_transaction(transaction4);
 
+        let engine_tx_pool = Arc::clone(&transaction_pool);
+
         // Run the async code on the new runtime
         rt.block_on(async {
-            let mut engine = ExecutionEngine::new(&thread_account_state_manager, &thread_block_state_manager, transaction_pool);
+            let mut engine = ExecutionEngine::new(&thread_account_state_manager, &thread_block_state_manager, engine_tx_pool);
             engine.start().await;
             // tokio::time::sleep(Duration::from_secs(2)).await;
             engine.stop().await;

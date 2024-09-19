@@ -20,7 +20,7 @@ use state_commitment::state_commitment_layer::StateCommitmentLayer;
 use state_management::account_loader::TrollupAccountLoader;
 use state_management::state_management::{ManageState, StateManager};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 #[derive(PartialEq, Eq, Debug)]
 enum EngineState {
@@ -46,14 +46,14 @@ enum EngineState {
 pub struct ExecutionEngine<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>> {
     account_state_management: &'a StateManager<A>,
     block_state_management: &'a StateManager<B>,
-    transaction_pool: TransactionPool,
+    transaction_pool: Arc<Mutex<TransactionPool>>,
     account_state_commitment: StateCommitmentLayer<AccountState>,
     transaction_state_commitment: StateCommitmentLayer<TrollupTransaction>,
     engine_state: EngineState
 }
 
 impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>> ExecutionEngine<'a, A, B> {
-    pub fn new(account_state_management: &'a StateManager<A>, block_state_management: &'a StateManager<B>, transaction_pool: TransactionPool) -> Self {
+    pub fn new(account_state_management: &'a StateManager<A>, block_state_management: &'a StateManager<B>, transaction_pool: Arc<Mutex<TransactionPool>>) -> Self {
         Self {
             account_state_management,
             block_state_management,
@@ -119,7 +119,9 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>> Exec
 
     /// Executes a block by processing a set of transactions.
     pub async fn execute_block(&mut self) {
-        let transactions = self.transaction_pool.get_next_transactions(4);
+        let mut tx_pool =  self.transaction_pool.lock().unwrap();
+        let transactions = tx_pool.get_next_transactions(4);
+        drop(tx_pool);
         if transactions.is_empty() {
             return
         }
@@ -178,6 +180,7 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>> Exec
         self.block_state_management.set_latest_block_id(&block.get_key().unwrap());
         self.block_state_management.set_state_record(&block.get_key().unwrap(), block.clone());
         self.block_state_management.commit();
+
         self.account_state_commitment.commit_to_l1(&accounts_zk_proof).await;
     }
 

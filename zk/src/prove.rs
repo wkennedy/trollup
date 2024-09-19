@@ -46,6 +46,7 @@ pub struct ProofPackage {
     pub prepared_verifying_key: PreparedVerifyingKey<Bn254>
 }
 
+// TODO Handle generation of proving key elsewhere and load it differently
 pub fn setup(save_keys: bool) -> (ProvingKey<Bn254>, VerifyingKey<Bn254>){
     let rng = &mut thread_rng();
     let account_state_circuit = AccountStateCircuit::default();
@@ -72,7 +73,6 @@ pub fn generate_proof(proving_key: &ProvingKey<Bn254>, verifying_key: &Verifying
     let account_state_circuit = AccountStateCircuit::new(accounts);
     let public_inputs = account_state_circuit.public_inputs();
 
-    // Create a proof
     let proof = Groth16::<Bn254>::prove(&proving_key,
                                         account_state_circuit,
                                         rng,
@@ -85,12 +85,6 @@ pub fn generate_proof(proving_key: &ProvingKey<Bn254>, verifying_key: &Verifying
         .iter()
         .map(|input| bytes_to_field(input))
         .collect::<Result<Vec<Fr>, _>>().expect("");
-
-    // let g1 = g1_affine_to_bytes(&fr_to_g1(&public_inputs_fr[0]));
-    // let g2 = g1_affine_to_bytes(&fr_to_g1(&public_inputs_fr[1]));
-    // let mut pi: Vec<[u8; 64]> = Vec::new();
-    // pi.push(<[u8; 64]>::try_from(&g1[0..64]).unwrap());
-    // pi.push(<[u8; 64]>::try_from(&g2[0..64]).unwrap());
 
     let prepared_verifying_key = prepare_verifying_key(&verifying_key);
 
