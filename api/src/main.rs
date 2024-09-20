@@ -14,6 +14,7 @@ use std::io::Read;
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result as AnyResult;
+use solana_sdk::transaction::Transaction;
 use utoipa::{Modify, OpenApi};
 use utoipa_swagger_ui::Config as SwaggerConfig;
 use warp::{
@@ -24,6 +25,7 @@ use warp::{
 };
 use warp::body::json;
 use trollup_api::handler;
+use trollup_api::handler::{with_handler, Handler};
 // use crate::config::Config;
 
 type Result<T> = std::result::Result<T, Rejection>;
@@ -53,60 +55,65 @@ async fn main() {
         });
     });
 
-    let _ = start_web_server();
+    let _ = start_web_server(Arc::clone(&transaction_pool)).await;
     // Wait for the thread to finish
     handle.join().unwrap();
 }
 
-async fn start_web_server() {
+async fn start_web_server(transaction_pool: Arc<Mutex<TransactionPool>>) {
     env_logger::init();
 
-    let api_doc_config = Arc::new(SwaggerConfig::from("/api-doc.json"));
-
-    #[derive(OpenApi)]
-    #[openapi(
-        info(
-            title = "Trollup API",
-            description = "The Trollup API provides functionality to get send and receive transactions.",
-            version = "0.0.1"
-        ),
-        paths(handler::send_transaction_handler, handler::get_transaction_handler),
-        tags(
-        (name = "handler", description = "Trollup API endpoints")
-        )
-    )]
-    struct ApiDoc;
-
-    let api_doc = warp::path("api-doc.json")
-        .and(warp::get())
-        .map(|| warp::reply::json(&ApiDoc::openapi()));
-
-    let swagger_ui = warp::path("swagger-ui")
-        .and(warp::get())
-        .and(warp::path::full())
-        .and(warp::path::tail())
-        .and(warp::any().map(move || api_doc_config.clone()))
-        .and_then(serve_swagger);
-
-    let health_route = warp::path!("health").and_then(handler::health_handler);
-
-    let send_transaction_route = warp::path("send-transaction")
-        .and(json())
-        .and_then(handler::send_transaction_handler);
-
-    let get_transaction_route = warp::path("get-transaction")
-        .and(warp::path::param())
-        .and_then(handler::get_transaction_handler);
-
-
-    let routes = health_route
-        .or(send_transaction_route)
-        .or(get_transaction_route)
-        .or(swagger_ui)
-        .or(api_doc)
-        .with(warp::cors().allow_any_origin());
-
+    let routes = routes(transaction_pool);
     warp::serve(routes).run(([0, 0, 0, 0], 8080)).await;
+}
+
+pub fn routes(
+    pool: Arc<Mutex<TransactionPool>>
+) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    health_route(Arc::clone(&pool))
+        .or(send_transaction_route(Arc::clone(&pool)))
+        .or(get_transaction_route(Arc::clone(&pool)))
+}
+
+fn with_pool(
+    pool: Arc<Mutex<TransactionPool>>,
+) -> impl Filter<Extract = (Arc<Mutex<TransactionPool>>,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || Arc::clone(&pool))
+}
+
+fn health_route(
+    pool: Arc<Mutex<TransactionPool>>,
+) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    warp::path!("health")
+        .and(with_pool(pool))
+        .and_then(|pool: Arc<Mutex<TransactionPool>>| async move {
+            let handler = Handler::new(pool);
+            handler.health_handler().await
+        })
+}
+
+fn send_transaction_route(
+    pool: Arc<Mutex<TransactionPool>>,
+) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    warp::path("send-transaction")
+        .and(with_pool(pool))
+        .and(warp::body::json())
+        .and_then(|pool: Arc<Mutex<TransactionPool>>, transaction: Transaction| async move {
+            let handler = Handler::new(pool);
+            handler.send_transaction_handler(transaction).await
+        })
+}
+
+fn get_transaction_route(
+    pool: Arc<Mutex<TransactionPool>>,
+) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    warp::path("get-transaction")
+        .and(with_pool(pool))
+        .and(warp::path::param())
+        .and_then(|pool: Arc<Mutex<TransactionPool>>, signature: String| async move {
+            let handler = Handler::new(pool);
+            handler.get_transaction_handler(signature).await
+        })
 }
 
 fn with_value(value: String) -> impl Filter<Extract=(String,), Error=Infallible> + Clone {
@@ -116,35 +123,35 @@ fn with_value(value: String) -> impl Filter<Extract=(String,), Error=Infallible>
 // fn with_config(value: Config) -> impl Filter<Extract = (Config,), Error = Infallible> + Clone {
 //     warp::any().map(move || value.clone())
 // }
-
-async fn serve_swagger(
-    full_path: FullPath,
-    tail: Tail,
-    config: Arc<SwaggerConfig<'static>>,
-) -> AnyResult<Box<dyn Reply + 'static>, Rejection> {
-    if full_path.as_str() == "/swagger-ui" {
-        return Ok(Box::new(warp::redirect::found(Uri::from_static(
-            "/swagger-ui/",
-        ))));
-    }
-
-    let path = tail.as_str();
-    match utoipa_swagger_ui::serve(path, config) {
-        Ok(file) => {
-            if let Some(file) = file {
-                Ok(Box::new(
-                    Response::builder()
-                        .header("Content-Type", file.content_type)
-                        .body(file.bytes),
-                ))
-            } else {
-                Ok(Box::new(StatusCode::NOT_FOUND))
-            }
-        }
-        Err(error) => Ok(Box::new(
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(error.to_string()),
-        )),
-    }
-}
+//
+// async fn serve_swagger(
+//     full_path: FullPath,
+//     tail: Tail,
+//     config: Arc<SwaggerConfig<'static>>,
+// ) -> AnyResult<Box<dyn Reply + 'static>, Rejection> {
+//     if full_path.as_str() == "/swagger-ui" {
+//         return Ok(Box::new(warp::redirect::found(Uri::from_static(
+//             "/swagger-ui/",
+//         ))));
+//     }
+//
+//     let path = tail.as_str();
+//     match utoipa_swagger_ui::serve(path, config) {
+//         Ok(file) => {
+//             if let Some(file) = file {
+//                 Ok(Box::new(
+//                     Response::builder()
+//                         .header("Content-Type", file.content_type)
+//                         .body(file.bytes),
+//                 ))
+//             } else {
+//                 Ok(Box::new(StatusCode::NOT_FOUND))
+//             }
+//         }
+//         Err(error) => Ok(Box::new(
+//             Response::builder()
+//                 .status(StatusCode::INTERNAL_SERVER_ERROR)
+//                 .body(error.to_string()),
+//         )),
+//     }
+// }

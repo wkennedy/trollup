@@ -21,3 +21,4 @@ lazy_static = "1.5.0"
 state = {path = "../state"}
 state_management = {path = "../state_management" }
 execution = {path = "../execution"}
+async-trait = "0.1.82"
