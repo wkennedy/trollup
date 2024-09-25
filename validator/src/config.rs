@@ -8,11 +8,12 @@ use serde_derive::{Deserialize, Serialize};
 pub struct Config {
     #[serde(default)]
     pub rpc_urls: HashMap<String, String>,
+    pub program_id: String
 }
 
 impl Config {
     pub fn build() -> Result<Config, &'static str> {
-        let rpc_url_dev = env::var("TROLLUP_API_RPC_URL_DEV")
+        let rpc_url_dev = env::var("TROLLUP_VALIDATOR_RPC_URL_DEV")
             .unwrap_or("https://api.devnet.solana.com".to_string());
         let rpc_url_test = env::var("TROLLUP_API_RPC_URL_TEST")
             .unwrap_or("https://api.testnet.solana.com".to_string());
@@ -27,7 +28,7 @@ impl Config {
         rpc_urls.insert("Main".to_string(), rpc_url_main);
         rpc_urls.insert("Local".to_string(), rpc_url_local);
 
-        Ok(Config { rpc_urls })
+        Ok(Config { rpc_urls, program_id: "2cQVZYvHb2Lw9jN1GcWEJ3k9rBBkyxnQdMFUbpabVt41".to_string() })
     }
 
     pub fn rpc_url(&self, input: &str) -> Result<&str> {

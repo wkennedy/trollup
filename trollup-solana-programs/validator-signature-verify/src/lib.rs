@@ -1,21 +1,15 @@
 use borsh::{BorshDeserialize, BorshSerialize};
-use libsecp256k1::{Message, PublicKey};
-use solana_program::{
-    account_info::AccountInfo,
-    entrypoint,
-    entrypoint::ProgramResult,
-    msg,
-    pubkey::Pubkey,
-};
+use solana_program::program_error::ProgramError;
+use solana_program::secp256k1_recover::{secp256k1_recover, Secp256k1Pubkey};
+use solana_program::{account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, keccak, msg, pubkey::Pubkey};
 
 // Off-chain generated proof and verification result
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ZkProofCommitment {
-    pub proof_hash: [u8; 32],
-    pub new_state_root: [u8; 32],
-    pub timestamp: u64,
     pub verifier_signature: [u8; 64],
-    pub public_key: [u8; 33],
+    pub recovery_id: u8,
+    pub public_key: [u8; 65],
+    pub new_state_root: [u8; 32],
 }
 
 entrypoint!(process_instruction);
@@ -43,8 +37,8 @@ fn process_instruction(
     let proof_commitment = ZkProofCommitment::try_from_slice(&instruction_data).expect("Error deserializing proof commitment");
     msg!("Verifying proof commitment");
 
-    // Verify the proof commitment (simplified)
-    let result = verify_signature(&proof_commitment);
+    // Verify the proof commitment
+    let result = verify_signature_with_recover(&proof_commitment);
     match result {
         Ok(_) => {
             // If valid, update on-chain state
@@ -52,34 +46,38 @@ fn process_instruction(
         }
         Err(_) => {
             msg!("Invalid proof commitment");
-            return Err(solana_program::program_error::ProgramError::InvalidInstructionData.into());
+            return Err(ProgramError::InvalidInstructionData.into());
         }
     }
 
     Ok(())
 }
 
-// fn verify_signature(commitment: &ZkProofCommitment) -> bool {
-//     // In a real implementation, this would involve more complex checks
-//     // For example, verifying a signature from a trusted off-chain verifier
-//     true
-// }
-
-// TODO
-// This function would be part of your Solana program
-fn verify_signature(
+fn verify_signature_with_recover(
     commitment: &ZkProofCommitment
 ) -> Result<bool, Box<dyn std::error::Error>> {
-    // Reconstruct the message
-    // let message = [&commitment.new_state_root[..], &commitment.timestamp.to_le_bytes()].concat();
-    // let message = Message::parse_slice(&commitment.new_state_root)?;
 
     // Verify the signature
-    let message = Message::parse_slice(&commitment.new_state_root).unwrap();
-    let signature = libsecp256k1::Signature::parse_standard_slice(&commitment.verifier_signature[..64]).unwrap();
-    let result = libsecp256k1::verify(&message, &signature, &PublicKey::parse_compressed(&commitment.public_key).unwrap());
-    Ok(result)
+    let message_hash = {
+        let mut hasher = keccak::Hasher::default();
+        hasher.hash(&commitment.new_state_root);
+        hasher.result()
+    };
+
+    // Perform the secp256k1 recovery
+    let recovered_pubkey = secp256k1_recover(&message_hash.0, commitment.recovery_id, &commitment.verifier_signature)?;
+
+    // TODO get public key from validator solana account
+    let expected_pubkey = Secp256k1Pubkey::new(&commitment.public_key[1..65]);
+    // Check if the recovered public key matches the expected one
+    if recovered_pubkey != expected_pubkey {
+        msg!("Signature verification failed");
+        return Err(ProgramError::MissingRequiredSignature.into());
+    }
+    
+    Ok(true)
 }
+
 
 fn update_on_chain_state(commitment: &ZkProofCommitment, accounts: &[AccountInfo]) -> ProgramResult {
     // Update the on-chain state root

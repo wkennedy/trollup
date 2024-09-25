@@ -1,5 +1,6 @@
 use crate::state_commitment_pool::{StateCommitmentPool, StatePool};
 use crate::validator_client::ValidatorClient;
+use ark_serialize::CanonicalSerialize;
 use borsh::to_vec;
 use rs_merkle::algorithms::Sha256;
 use rs_merkle::{Hasher, MerkleTree};
@@ -7,12 +8,11 @@ use sha2::Digest;
 use state::account_state::AccountState;
 use state::block::Block;
 use state::state_record::StateRecord;
+use state::transaction::TrollupTransaction;
 use state_management::state_management::{ManageState, StateManager};
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
-use ark_serialize::CanonicalSerialize;
-use state::transaction::TrollupTransaction;
 use trollup_zk::prove::{generate_proof_load_keys, setup};
 
 #[derive(PartialEq, Eq, Debug)]
@@ -116,9 +116,12 @@ impl<'a, B: ManageState<Record=Block>> StateCommitment<'a, B> {
                 let validator_result = validator_client.prove(proof_package_prepared, &account_state_root).await;
                 match validator_result {
                     Ok(response) => {
+                        println!("Successful response from validator: {:?}", response);
                         //TODO get info from validator response
                         self.transaction_tree.commit();
                         self.state_tree.commit();
+                        
+                        //TODO persist state changes
 
                         let latest_block_id = self.block_state_management.get_latest_block_id().unwrap_or(Block::get_id(0));
                         let latest_block = self.block_state_management.get_state_record(&latest_block_id).unwrap_or(Block::default());
@@ -133,7 +136,13 @@ impl<'a, B: ManageState<Record=Block>> StateCommitment<'a, B> {
                         self.block_state_management.set_state_record(&block.get_key().unwrap(), block.clone());
                         self.block_state_management.commit();
                     }
-                    Err(_) => {}
+                    Err(response) => {
+                        println!("Unsuccessful response from validator: {:?}", response);
+
+                        // If the validation failed, abort the uncommitted changes.
+                        self.transaction_tree.abort_uncommitted();
+                        self.state_tree.abort_uncommitted();
+                    }
                 }
             }
         }

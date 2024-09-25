@@ -1,8 +1,12 @@
-use std::collections::HashMap;
-use std::str::FromStr;
-use state::state_record::{StateRecord, ZkProof, ZkProofCommitment};
+use crate::error::ValidationError;
+use crate::error::ValidationError::CommitmentTransactionFailed;
+use crate::error::ValidationError::ProofVerificationFailed;
 use ark_serialize::CanonicalSerializeHashExt;
+use borsh::to_vec;
+use libsecp256k1::{Message, PublicKey, SecretKey};
+use sha2::Sha256;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_program::keccak;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     instruction::{AccountMeta, Instruction},
@@ -10,65 +14,69 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     transaction::Transaction,
 };
-use borsh::{to_vec};
-use libsecp256k1::{Message, PublicKey, SecretKey};
-use sha2::Sha256;
-use solana_sdk::alt_bn128::AltBn128Error;
-use solana_sdk::program_error::ProgramError;
+use state::state_record::{StateRecord, ZkProofCommitment};
+use std::str::FromStr;
 use trollup_zk::prove::{ProofPackage, ProofPackagePrepared};
-use trollup_zk::verify::{verify_prepared_proof_package, verify_proof_package};
-use crate::error::ValidationError;
-use crate::error::ValidationError::ProofVerificationFailed;
-use crate::error::ValidationError::CommitmentTransactionFailed;
+use trollup_zk::verify::verify_proof_package;
 
 fn create_and_sign_commitment(
-    proof_hash: [u8; 32],
     new_state_root: [u8; 32],
-    timestamp: u64,
     verifier_secret_key: &[u8; 32],
 ) -> Result<ZkProofCommitment, Box<dyn std::error::Error>> {
+    let message_hash = {
+        let mut hasher = keccak::Hasher::default();
+        hasher.hash(&new_state_root);
+        hasher.result()
+    };
 
     // If verification succeeds, create and sign the commitment
-    let message = Message::parse_slice(&new_state_root)?;
+    let message = Message::parse_slice(&message_hash.0)?;
 
     // Create secret key from input bytes
     let secret_key = SecretKey::parse(verifier_secret_key)?;
-    let public_key = PublicKey::from_secret_key(&secret_key).serialize_compressed();
+    let public_key = PublicKey::from_secret_key(&secret_key).serialize();
 
     // Sign the message
-    let (signature, _recovery_id) = libsecp256k1::sign(&message, &secret_key);
+    let (signature, recovery_id) = libsecp256k1::sign(&message, &secret_key);
 
     // Combine signature and recovery ID into 64 bytes
-    let mut combined_signature = [0u8; 64];
-    combined_signature[..64].copy_from_slice(&signature.serialize());
-    // combined_signature[63] = recovery_id.serialize();
+    let mut signature_bytes = [0u8; 64];
+    signature_bytes[..64].copy_from_slice(&signature.serialize());
 
     Ok(ZkProofCommitment {
-        proof_hash: proof_hash,
-        new_state_root: new_state_root,
-        timestamp,
-        verifier_signature: combined_signature,
+        verifier_signature: signature_bytes,
+        recovery_id: recovery_id.serialize(),
         public_key,
+        new_state_root: new_state_root,
     })
 }
 
 pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new_state_root: [u8; 32]) -> Result<bool, ValidationError> {
     // Connect to the Solana localnet
+    // TODO get from config
     let rpc_url = "http://127.0.0.1:8899".to_string();
     let client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::confirmed());
 
     let proof_package: ProofPackage = proof_package_prepared.into();
     let is_valid = verify_proof_package(&proof_package);
 
+    println!("Proof is valid. Creating commitment.");
+
     if !is_valid {
         return Err(ProofVerificationFailed);
     }
 
+    // TODO thinking about using these for on chain data and/or logging...
     let proof = proof_package.proof;
     let hash: [u8; 32] = proof.hash::<Sha256>().into();
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
 
     // Load your Solana wallet keypair
     // TODO remove airdrop
+    // TODO load payer from config
     let payer = Keypair::new();
     let airdrop_amount = 1_000_000_000; // 1 SOL in lamports
     match request_airdrop(&client, &payer.pubkey(), airdrop_amount).await {
@@ -77,21 +85,14 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
     }
 
     // Your program ID (replace with your actual program ID)
-    let program_id = Pubkey::from_str("3nMqU7dFciQJQyjjZj1Gh3Ctt5fhe6g7WUbqMXRjJhzB").expect("");
-
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let program_id = Pubkey::from_str("2cQVZYvHb2Lw9jN1GcWEJ3k9rBBkyxnQdMFUbpabVt41").expect("");
 
     // Create and sign the commitment (this would normally be done by the trusted off-chain verifier)
     // TODO create and load this from somewhere else
     let secret = SecretKey::default().serialize();
 
     let commitment = create_and_sign_commitment(
-        hash,
         new_state_root,
-        timestamp,
         &secret).unwrap();
 
     // Serialize the commitment
@@ -156,7 +157,7 @@ async fn request_airdrop(client: &RpcClient, pubkey: &Pubkey, amount: u64) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use libsecp256k1::{SecretKey, PublicKey};
+    use libsecp256k1::{PublicKey, SecretKey};
     use rand::thread_rng;
 
     #[test]
@@ -176,10 +177,8 @@ mod tests {
 
         // Call the function
         let result = create_and_sign_commitment(
-            proof_hash,
             new_state_root,
-            timestamp,
-            &secret_key_bytes
+            &secret_key_bytes,
         );
 
         // Assert that the result is Ok
@@ -189,17 +188,17 @@ mod tests {
         let commitment = result.unwrap();
 
         // Verify the fields of the commitment
-        assert_eq!(commitment.proof_hash, proof_hash);
+        // assert_eq!(commitment.proof_hash, proof_hash);
         assert_eq!(commitment.new_state_root, new_state_root);
-        assert_eq!(commitment.timestamp, timestamp);
+        // assert_eq!(commitment.timestamp, timestamp);
 
         // Verify the public key
-        let expected_public_key = PublicKey::from_secret_key(&secret_key).serialize_compressed();
+        let expected_public_key = PublicKey::from_secret_key(&secret_key).serialize();
         assert_eq!(commitment.public_key, expected_public_key);
 
         // Verify the signature
         let message = Message::parse_slice(&new_state_root).unwrap();
         let signature = libsecp256k1::Signature::parse_standard_slice(&commitment.verifier_signature[..64]).unwrap();
-        assert!(libsecp256k1::verify(&message, &signature, &PublicKey::parse_compressed(&commitment.public_key).unwrap()));
+        assert!(libsecp256k1::verify(&message, &signature, &PublicKey::parse(&commitment.public_key).unwrap()));
     }
 }

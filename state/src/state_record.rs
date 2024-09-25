@@ -31,48 +31,8 @@ impl ZkProof {
 // It includes a signature from a trusted off-chain verifier
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ZkProofCommitment {
-    pub proof_hash: [u8; 32],
-    pub new_state_root: [u8; 32],
-    pub timestamp: u64,
     pub verifier_signature: [u8; 64],
-    pub public_key: [u8; 33],
+    pub recovery_id: u8,
+    pub public_key: [u8; 65],
+    pub new_state_root: [u8; 32],
 }
-
-// pub trait ZkProofSystem<S: StateRecord> {
-//     fn new(state_records: Vec<S>) -> Proof<Bn245> {
-//
-//     }
-// }
-// pub struct ZkProofSystem<S: StateRecord> {
-//     state_records: Vec<S>,
-// }
-//
-// impl<S: StateRecord> ZkProofSystem<S> {
-//     pub fn new(state_records: Vec<S>) -> Self {
-//         Self { state_records }
-//     }
-//
-//     pub fn generate_proof(&self) -> ZkProof {
-//         let mut hasher = Sha256::new();
-//
-//         // Hash all transactions
-//         for record in &self.state_records {
-//             let tx_bytes = borsh::to_vec(&record).unwrap();
-//             hasher.update(&tx_bytes);
-//         }
-//
-//         let merkle_root = hasher.finalize().into();
-//
-//         ZkProof {
-//             merkle_root,
-//             state_record_count: self.state_records.len() as u64,
-//         }
-//     }
-//
-//     pub fn verify_proof(&self, proof: &ZkProof) -> bool {
-//         let generated_proof = self.generate_proof();
-//
-//         generated_proof.merkle_root == proof.merkle_root &&
-//             generated_proof.state_record_count == proof.state_record_count
-//     }
-// }
