@@ -111,7 +111,8 @@ impl<'a, B: ManageState<Record=Block>> StateCommitment<'a, B> {
                 let account_state_root = self.get_uncommitted_root().expect("Error getting account state root");
                 // let transaction_state_root = self.transaction_state_commitment.get_state_root().expect("Error getting transaction state root");
 
-                let validator_client = ValidatorClient::new("http://localhost:");
+                // TODO get from config
+                let validator_client = ValidatorClient::new("http://localhost:27183");
                 let validator_result = validator_client.prove(proof_package_prepared, &account_state_root).await;
                 match validator_result {
                     Ok(response) => {
@@ -183,6 +184,7 @@ impl <'a, B: ManageState<Record=Block>> StateCommitter<AccountState> for StateCo
     async fn start(&mut self) {
         self.committer_state = CommitterState::Running;
         setup(true);
+        println!("StateCommitter started.");
         loop {
             if self.committer_state == CommitterState::Stopped {
                 println!("StateCommitter stopped.");

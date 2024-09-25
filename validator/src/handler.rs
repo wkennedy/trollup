@@ -28,7 +28,7 @@ pub async fn prove(proof_package_prepared: ProofPackagePrepared, new_state_root:
     let state_root_result = general_purpose::STANDARD.decode(new_state_root);
     match state_root_result {
         Ok(state_root) => {
-            let new_state_root_bytes: &[u8; 32] = <&[u8; 32]>::try_from(state_root.as_bytes()).unwrap();
+            let new_state_root_bytes: &[u8; 32] = <&[u8; 32]>::try_from(state_root.as_slice()).unwrap();
             let result = verify_and_commit(proof_package_prepared, new_state_root_bytes.clone()).await;
             match result {
                 Ok(is_valid) => {

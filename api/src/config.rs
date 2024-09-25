@@ -29,7 +29,9 @@ impl Config {
         rpc_urls.insert("Main".to_string(), rpc_url_main);
         rpc_urls.insert("Local".to_string(), rpc_url_local);
 
-        Ok(Config { rpc_urls, trollup_validator_url: "".to_string() })
+        let trollup_validator_url = env::var("TROLLUP_VALIDATOR_URL").unwrap_or("http://localhost:27183".to_string());
+
+        Ok(Config { rpc_urls, trollup_validator_url })
     }
 
     pub fn rpc_url(&self, input: &str) -> Result<&str> {

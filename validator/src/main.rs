@@ -23,7 +23,7 @@ type Result<T> = std::result::Result<T, Rejection>;
 
 #[tokio::main]
 async fn main() {
-    let config = load_config().expect("Error loading config");
+    // let config = load_config().expect("Error loading config");
 
     env_logger::init();
 

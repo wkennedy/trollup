@@ -5,8 +5,13 @@ use warp::reply::Json;
 use state::transaction::{convert_to_trollup_transaction, TrollupTransaction};
 use std::sync::{Arc, Mutex};
 use execution::transaction_pool::TransactionPool;
+use crate::config::Config;
 
 type Result<T> = std::result::Result<T, Rejection>;
+
+lazy_static! {
+    static ref CONFIG: Config = Config::build().unwrap();
+}
 
 pub struct Handler {
     transaction_pool: Arc<Mutex<TransactionPool>>,

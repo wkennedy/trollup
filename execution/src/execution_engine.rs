@@ -97,9 +97,10 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
     /// ```
     pub async fn start(&mut self) {
         self.engine_state = EngineState::Running;
+        println!("Execution Engine started.");
         loop {
             if self.engine_state == EngineState::Stopped {
-                println!("Engine stopped.");
+                println!("Execution Engine stopped.");
                 break;
             } else {
                 self.execute_block().await;
@@ -108,7 +109,7 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
     }
 
     pub async fn stop(&mut self) {
-        println!("Stopping Engine");
+        println!("Stopping Execution Engine");
         self.engine_state = EngineState::Stopped;
     }
 
