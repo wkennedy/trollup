@@ -1,11 +1,12 @@
+use borsh::{BorshDeserialize, BorshSerialize};
+use libsecp256k1::{Message, PublicKey};
 use solana_program::{
     account_info::AccountInfo,
     entrypoint,
     entrypoint::ProgramResult,
-    pubkey::Pubkey,
     msg,
+    pubkey::Pubkey,
 };
-use borsh::{BorshDeserialize, BorshSerialize};
 
 // Off-chain generated proof and verification result
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -43,40 +44,42 @@ fn process_instruction(
     msg!("Verifying proof commitment");
 
     // Verify the proof commitment (simplified)
-    if !verify_signature(&proof_commitment) {
-        msg!("Invalid proof commitment");
-        return Err(solana_program::program_error::ProgramError::InvalidInstructionData.into());
+    let result = verify_signature(&proof_commitment);
+    match result {
+        Ok(_) => {
+            // If valid, update on-chain state
+            update_on_chain_state(&proof_commitment, accounts)?;
+        }
+        Err(_) => {
+            msg!("Invalid proof commitment");
+            return Err(solana_program::program_error::ProgramError::InvalidInstructionData.into());
+        }
     }
-
-    // If valid, update on-chain state
-    update_on_chain_state(&proof_commitment, accounts)?;
 
     Ok(())
 }
 
-fn verify_signature(commitment: &ZkProofCommitment) -> bool {
-    // In a real implementation, this would involve more complex checks
-    // For example, verifying a signature from a trusted off-chain verifier
-    true
-}
+// fn verify_signature(commitment: &ZkProofCommitment) -> bool {
+//     // In a real implementation, this would involve more complex checks
+//     // For example, verifying a signature from a trusted off-chain verifier
+//     true
+// }
 
 // TODO
 // This function would be part of your Solana program
-// fn verify_signature(
-//     commitment: &ZkProofCommitment
-// ) -> Result<bool, Box<dyn std::error::Error>> {
-//     // Reconstruct the message
-//     // let message = [&commitment.new_state_root[..], &commitment.timestamp.to_le_bytes()].concat();
-//     let message = Message::parse_slice(&commitment.new_state_root[..])?;
-//
-//     // Extract signature and recovery ID
-//     let signature = Signature::parse_standard_slice(&commitment.verifier_signature[..63])?;
-//     let public_key = PublicKey::parse_compressed(&commitment.public_key).expect("Error getting public key");
-//     let recovery_id = RecoveryId::parse(commitment.verifier_signature[63])?;
-//
-//     // Verify the signature
-//     Ok(libsecp256k1::verify(&message, &signature, &public_key))
-// }
+fn verify_signature(
+    commitment: &ZkProofCommitment
+) -> Result<bool, Box<dyn std::error::Error>> {
+    // Reconstruct the message
+    // let message = [&commitment.new_state_root[..], &commitment.timestamp.to_le_bytes()].concat();
+    // let message = Message::parse_slice(&commitment.new_state_root)?;
+
+    // Verify the signature
+    let message = Message::parse_slice(&commitment.new_state_root).unwrap();
+    let signature = libsecp256k1::Signature::parse_standard_slice(&commitment.verifier_signature[..64]).unwrap();
+    let result = libsecp256k1::verify(&message, &signature, &PublicKey::parse_compressed(&commitment.public_key).unwrap());
+    Ok(result)
+}
 
 fn update_on_chain_state(commitment: &ZkProofCommitment, accounts: &[AccountInfo]) -> ProgramResult {
     // Update the on-chain state root

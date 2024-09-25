@@ -1,253 +1,201 @@
+use crate::state_commitment_pool::{StateCommitmentPool, StatePool};
+use crate::validator_client::ValidatorClient;
+use borsh::to_vec;
+use rs_merkle::algorithms::Sha256;
+use rs_merkle::{Hasher, MerkleTree};
+use sha2::Digest;
+use state::account_state::AccountState;
+use state::block::Block;
+use state::state_record::StateRecord;
+use state_management::state_management::{ManageState, StateManager};
 use std::collections::HashMap;
-use std::str::FromStr;
-use merkle::merkle_proof::MerkleProof;
-use merkle::merkle_tree::MerkleTree;
-use state::state_record::{StateRecord, ZkProof, ZkProofCommitment};
+use std::future::Future;
+use std::sync::{Arc, Mutex};
+use ark_serialize::CanonicalSerialize;
+use state::transaction::TrollupTransaction;
+use trollup_zk::prove::{generate_proof_load_keys, setup};
 
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{
-    commitment_config::CommitmentConfig,
-    instruction::{AccountMeta, Instruction},
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    transaction::Transaction,
-};
-use borsh::{to_vec};
-use libsecp256k1::{Message, PublicKey, SecretKey};
-
-/// Represents a state commitment layer.
-///
-/// This layer encapsulates the state and the merkle tree data structure used to store the state.
-/// The state is stored as key-value pairs in a hashmap, with each key represented as a `Vec<u8>` and each value as a `T` which implements the `StateRecord` trait.
-///
-/// # Generic Parameters
-///
-/// * `T`: The type of state record that implements the `StateRecord` trait.
-///
-/// # Fields
-///
-/// * `state`: A hashmap that stores the state as key-value pairs.
-/// * `merkle_tree`: A merkle tree data structure used to store the state.
-///
-/// # Examples
-///
-/// ```rust
-/// use std::collections::HashMap;
-///
-/// pub struct StateCommitmentLayer<T: StateRecord> {
-///     state: HashMap<Vec<u8>, T>,
-///     merkle_tree: MerkleTree<T>,
-/// }
-///
-/// // Create a new state commitment layer
-/// let state_commitment_layer = StateCommitmentLayer {
-///     state: HashMap::new(),
-///     merkle_tree: MerkleTree::new(),
-/// };
-/// ```
-pub struct StateCommitmentLayer<T: StateRecord> {
-    state: HashMap<[u8; 32], T>,
-    merkle_tree: MerkleTree<T>,
+#[derive(PartialEq, Eq, Debug)]
+enum CommitterState {
+    Running,
+    Stopped,
+    Initialized,
 }
 
-impl<T: StateRecord> StateCommitmentLayer<T> {
-    pub fn new(state_records: Vec<T>) -> Self {
-        let records_map = state_records.iter().map(|a| (a.get_key().unwrap(), a.clone())).collect();
-        let merkle_tree = MerkleTree::new(state_records);
-        StateCommitmentLayer { state: records_map, merkle_tree }
+pub struct StateCommitmentPackage<S: StateRecord> {
+    pub state_records: Vec<S>,
+    pub transactions: Vec<TrollupTransaction>,
+    pub transaction_ids: Vec<[u8; 32]>
+}
+
+impl <S: StateRecord> StateCommitmentPackage<S> {
+    pub fn new(state_records: Vec<S>, transactions: Vec<TrollupTransaction>, transaction_ids: Vec<[u8; 32]>) -> Self {
+        StateCommitmentPackage {
+            state_records,
+            transactions,
+            transaction_ids,
+        }
     }
 
-    pub fn get_state_root(&self) -> Option<[u8; 32]> {
-        self.merkle_tree.root_hash()
+    pub fn hash(state_records: Vec<S>) -> [u8; 32] {
+        let mut hasher = sha2::Sha256::new();
+
+        for state_record in state_records {
+            hasher.update(to_vec(&state_record).unwrap());
+        }
+        let hash: [u8; 32] = hasher.finalize().into();
+        hash
+    }
+}
+
+pub trait StateCommitter<T: StateRecord> {
+    fn add_states(&mut self, state_records: &Vec<T>);
+
+    fn add_transactions(&mut self, transactions: &Vec<TrollupTransaction>);
+
+    fn get_leaf_index(&self, id: &[u8; 32]) -> Option<usize>;
+
+    fn get_root(&self) -> Option<[u8; 32]>;
+    fn get_uncommitted_root(&self) -> Option<[u8; 32]>;
+    fn start(&mut self) -> impl Future<Output = ()>;
+    fn stop(&mut self) -> impl Future<Output = ()>;
+}
+
+
+pub struct StateCommitment<'a, B: ManageState<Record=Block>> {
+    commitment_pool: Arc<Mutex<StateCommitmentPool<AccountState>>>,
+    committer_state: CommitterState,
+    block_state_management: &'a StateManager<B>,
+    state_tree: MerkleTree<Sha256>,
+    transaction_tree: MerkleTree<Sha256>,
+    index_map: HashMap<[u8; 32], usize>,
+}
+impl<'a, B: ManageState<Record=Block>> StateCommitment<'a, B> {
+    pub fn new(commitment_pool: Arc<Mutex<StateCommitmentPool<AccountState>>>, block_state_management: &'a StateManager<B>) -> Self {
+        StateCommitment {
+            commitment_pool,
+            committer_state: CommitterState::Initialized,
+            block_state_management,
+            state_tree: MerkleTree::<Sha256>::new(),
+            transaction_tree: MerkleTree::<Sha256>::new(),
+            index_map: HashMap::new(),
+        }
     }
 
-    pub fn generate_proof(&self, key: &[u8]) -> Option<MerkleProof> {
-        self.state.get(key).map(|account| {
-            self.merkle_tree.generate_proof(account)
-        })?
-    }
+    async fn read_from_pool(&mut self) {
+        let mut commitment_pool = self.commitment_pool.lock().unwrap();
+        let commitment_package = commitment_pool.get_next();
+        drop(commitment_pool);
 
-    pub fn update_record(&mut self, state_record: T) {
-        match state_record.get_key() {
-            None => {}
-            Some(key) => {
-                self.state.insert(key, state_record.clone());
-                let records: Vec<_> = self.state.values().cloned().collect();
-                self.merkle_tree = MerkleTree::new(records);
+        match commitment_package {
+            None => { return }
+            Some(commitment_package) => {
+                // Create proof, send proof to validator, once validator commits to a verify, then commit account and block changes to db
+
+                self.add_transactions(&commitment_package.transactions);
+
+                let account_states = commitment_package.state_records;
+                let account_addresses: Vec<[u8; 32]> = account_states
+                    .iter()
+                    .map(|state| {
+                        println!("Account updated: {:?}", &state);
+                        // self.account_state_management.set_state_record(&state.address.to_bytes(), state.clone());
+                        // self.account_state_commitment.update_record(state.clone());
+                        state.address.to_bytes()
+                    })
+                    .collect();
+
+                self.add_states(&account_states);
+                let (proof_package_lite, proof_package_prepared, proof_package) = generate_proof_load_keys(account_states);
+
+                let account_state_root = self.get_uncommitted_root().expect("Error getting account state root");
+                // let transaction_state_root = self.transaction_state_commitment.get_state_root().expect("Error getting transaction state root");
+
+                let validator_client = ValidatorClient::new("http://localhost:");
+                let validator_result = validator_client.prove(proof_package_prepared, &account_state_root).await;
+                match validator_result {
+                    Ok(response) => {
+                        //TODO get info from validator response
+                        self.transaction_tree.commit();
+                        self.state_tree.commit();
+
+                        let latest_block_id = self.block_state_management.get_latest_block_id().unwrap_or(Block::get_id(0));
+                        let latest_block = self.block_state_management.get_state_record(&latest_block_id).unwrap_or(Block::default());
+                        let next_block_number = latest_block.block_number + 1;
+
+                        let mut compressed_proof = Vec::new();
+                        proof_package.proof.serialize_uncompressed(compressed_proof.clone()).expect("");
+
+                        let block = Block::new(next_block_number, Box::from(self.transaction_tree.root().unwrap()), Box::from(account_state_root), compressed_proof, commitment_package.transaction_ids, account_addresses);
+                        println!("Saving latest block: {:?}", &block.get_key());
+                        self.block_state_management.set_latest_block_id(&block.get_key().unwrap());
+                        self.block_state_management.set_state_record(&block.get_key().unwrap(), block.clone());
+                        self.block_state_management.commit();
+                    }
+                    Err(_) => {}
+                }
             }
         }
-
     }
+}
 
-    /// Verifies the ZK proof and signs the commitment.
-    ///
-    /// # Arguments
-    ///
-    /// * `zk_proof` - The ZK proof to verify.
-    /// * `new_state_root` - The new state root.
-    /// * `timestamp` - The timestamp.
-    /// * `verifier_secret_key` - The verifier's secret key.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Result` containing the `ZkProofCommitment` if verification and signing succeed,
-    /// or a `Box<dyn std::error::Error>` if an error occurs.
-    ///
-    /// # Remarks
-    ///
-    /// This function verifies the provided ZK proof and signs the commitment if verification succeeds.
-    /// The verification process is not included and will be implemented as a complex operation in the future.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use crate::ZkProof;
-    ///
-    /// let zk_proof = ZkProof::new();
-    /// let new_state_root = [0u8; 32];
-    /// let timestamp = 1234567890;
-    /// let verifier_secret_key = [0u8; 32];
-    ///
-    /// let result = verify_and_sign(&zk_proof, new_state_root, timestamp, &verifier_secret_key);
-    /// assert!(result.is_ok());
-    /// ```
-    fn verify_and_sign(
-        &self,
-        zk_proof: &ZkProof,
-        new_state_root: [u8; 32],
-        timestamp: u64,
-        verifier_secret_key: &[u8; 32],
-    ) -> Result<ZkProofCommitment, Box<dyn std::error::Error>> {
-        // TODO
-        // Verify the ZK proof (this would be a complex operation)
-        // if !(self.verify_proof(zk_proof)) {
-        //     return Err("ZK proof verification failed".into());
-        // }
 
-        // If verification succeeds, create and sign the commitment
-        // let message = [&new_state_root[..]].concat();
-        let message = Message::parse_slice(&new_state_root)?;
-
-        // Create secret key from input bytes
-        let secret_key = SecretKey::parse(verifier_secret_key)?;
-        let public_key = PublicKey::from_secret_key(&secret_key).serialize_compressed();
-
-        // Sign the message
-        let (signature, _recovery_id) = libsecp256k1::sign(&message, &secret_key);
-
-        // Combine signature and recovery ID into 64 bytes
-        let mut combined_signature = [0u8; 64];
-        combined_signature[..64].copy_from_slice(&signature.serialize());
-        // combined_signature[63] = recovery_id.serialize();
-
-        Ok(ZkProofCommitment {
-            proof_hash: zk_proof.hash_sha256(),
-            new_state_root,
-            timestamp,
-            verifier_signature: combined_signature,
-            public_key,
-        })
-    }
-
-    /// Commit the given ZkProof to Layer 1 (Solana blockchain).
-    ///
-    /// # Arguments
-    ///
-    /// * `zk_proof` - A reference to the ZkProof that will be committed.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use my_crate::commit_to_l1;
-    /// # use my_crate::ZkProof;
-    /// # async fn example() {
-    /// # let zk_proof = ZkProof::new();
-    /// commit_to_l1(&zk_proof).await;
-    /// # }
-    /// ```
-    pub async fn commit_to_l1(&self, zk_proof: &ZkProof) {
-        // Connect to the Solana localnet
-        let rpc_url = "http://127.0.0.1:8899".to_string();
-        let client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::confirmed());
-
-        // Load your Solana wallet keypair
-        let payer = Keypair::new();
-        let airdrop_amount = 1_000_000_000; // 1 SOL in lamports
-        match StateCommitmentLayer::<T>::request_airdrop(&client, &payer.pubkey(), airdrop_amount).await {
-            Ok(_) => println!("Airdrop successful!"),
-            Err(err) => eprintln!("Airdrop failed: {}", err),
-        }
-
-        // Your program ID (replace with your actual program ID)
-        let program_id = Pubkey::from_str("3nMqU7dFciQJQyjjZj1Gh3Ctt5fhe6g7WUbqMXRjJhzB").expect("");
-
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        // Create and sign the commitment (this would normally be done by the trusted off-chain verifier)
-        let state_root = self.get_state_root().expect("No state root available.");
-        let r: [u8; 32] = state_root.try_into().unwrap();
-        let secret = SecretKey::default().serialize();
-
-        let commitment = self.verify_and_sign(
-            &zk_proof,
-            r.clone(),
-            timestamp,
-            &secret).unwrap(); //.unwrap()).expect("Error creating ZkProofCommitment");
-
-        // Serialize the commitment
-        let instruction_data = to_vec(&commitment).unwrap();
-
-        // Calculate the exact size needed for the account
-        let account_size = instruction_data.len();
-
-        // Create the program account that will store the state
-        let state_account = Keypair::new();
-        let create_account_ix = solana_sdk::system_instruction::create_account(
-            &payer.pubkey(),
-            &state_account.pubkey(),
-            client.get_minimum_balance_for_rent_exemption(account_size).await.unwrap(), // Size of the state (32 bytes)
-            account_size as u64, // Size of the account data
-            &program_id,
-        );
-
-        // Create the instruction to call our program
-        let accounts = vec![AccountMeta::new(state_account.pubkey(), false)];
-        let instruction = Instruction::new_with_borsh(
-            program_id,
-            &commitment,
-            accounts,
-        );
-
-        // Create and send the transaction
-        let recent_blockhash = client.get_latest_blockhash().await.unwrap();
-        let transaction = Transaction::new_signed_with_payer(
-            &[create_account_ix, instruction],
-            Some(&payer.pubkey()),
-            &[&payer, &state_account],
-            recent_blockhash,
-        );
-
-        // Send and confirm transaction
-        match client.send_and_confirm_transaction(&transaction).await {
-            Ok(signature) => println!("Transaction sent successfully. Signature: {}", signature),
-            Err(err) => println!("Error sending transaction: {}", err),
+impl <'a, B: ManageState<Record=Block>> StateCommitter<AccountState> for StateCommitment<'a, B> {
+    fn add_states(&mut self, state_records: &Vec<AccountState>) {
+        for state_record in state_records {
+            let serialized = to_vec(state_record).unwrap();
+            let hash: [u8; 32] = Sha256::hash(&serialized).into();
+            match self.state_tree.leaves() {
+                None => {
+                    let index = 0;
+                    self.state_tree.insert(hash);
+                    self.index_map.insert(state_record.get_key().unwrap(), index);
+                }
+                Some(leaves) => {
+                    let index = leaves.len();
+                    self.state_tree.insert(hash);
+                    self.index_map.insert(state_record.get_key().unwrap(), index);
+                }
+            }
         }
     }
 
-    async fn request_airdrop(client: &RpcClient, pubkey: &Pubkey, amount: u64) -> Result<(), Box<dyn std::error::Error>> {
-        let signature = client.request_airdrop(pubkey, amount).await?;
+    fn add_transactions(&mut self, transactions: &Vec<TrollupTransaction>) {
+        for transaction in transactions {
+            let serialized = to_vec(transaction).unwrap();
+            let hash: [u8; 32] = Sha256::hash(&serialized).into();
+            self.transaction_tree.insert(hash);
+        }
+    }
 
-        // Wait for the transaction to be confirmed
+    fn get_leaf_index(&self, id: &[u8; 32]) -> Option<usize> {
+        self.index_map.get(id).cloned()
+    }
+
+    fn get_root(&self) -> Option<[u8; 32]> {
+        self.state_tree.root()
+    }
+
+    fn get_uncommitted_root(&self) -> Option<[u8; 32]> {
+        self.state_tree.uncommitted_root()
+    }
+
+    async fn start(&mut self) {
+        self.committer_state = CommitterState::Running;
+        setup(true);
         loop {
-            let confirmation = client.confirm_transaction(&signature).await.unwrap();
-            if confirmation {
+            if self.committer_state == CommitterState::Stopped {
+                println!("StateCommitter stopped.");
                 break;
+            } else {
+                self.read_from_pool().await;
             }
         }
-        Ok(())
+    }
+
+    async fn stop(&mut self) {
+        println!("Stopping StateCommitter");
+        self.committer_state = CommitterState::Stopped;
     }
 
 }

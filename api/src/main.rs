@@ -1,19 +1,20 @@
-use std::thread;
+use std::{env, thread};
 use std::time::Duration;
 use tokio::runtime::Runtime;
 use execution::execution_engine::ExecutionEngine;
 use execution::transaction_pool::TransactionPool;
 use state::account_state::AccountState;
 use state::block::Block;
-use state::state_record::ZkProofSystem;
 use state::transaction::{message_header_to_bytes, TrollupCompileInstruction, TrollupMessage, TrollupTransaction};
 use state_management::sled_state_management::SledStateManagement;
 use state_management::state_management::StateManager;
 use std::convert::Infallible;
+use std::fs::File;
 use std::io::Read;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
-
 use anyhow::Result as AnyResult;
+use log::trace;
 use solana_sdk::transaction::Transaction;
 use utoipa::{Modify, OpenApi};
 use utoipa_swagger_ui::Config as SwaggerConfig;
@@ -24,14 +25,17 @@ use warp::{
     path::{FullPath, Tail}, Rejection, Reply,
 };
 use warp::body::json;
+use state_commitment::state_commitment_layer::{StateCommitment, StateCommitter};
+use state_commitment::state_commitment_pool::{StateCommitmentPool, StatePool};
+use trollup_api::config::{Config, ConfigError};
 use trollup_api::handler;
 use trollup_api::handler::{with_handler, Handler};
-// use crate::config::Config;
 
 type Result<T> = std::result::Result<T, Rejection>;
 
 #[tokio::main]
 async fn main() {
+    // let config = load_config().expect("Error loading config");
 
     //Initialize our state managers. Currently only sled is implemented, but the idea is to use be able to use different DBs (RocksDB, etc...), but still utilize the StateManager as the interface
     let account_state_manager = Arc::new(StateManager::<SledStateManagement<AccountState>>::new("This is blank for demo purposes, using default location"));
@@ -41,30 +45,47 @@ async fn main() {
     let thread_account_state_manager = Arc::clone(&account_state_manager);
     let thread_block_state_manager = Arc::clone(&block_state_manager);
     let transaction_pool = Arc::new(Mutex::new(TransactionPool::new()));
+    let commitment_pool = Arc::new(Mutex::new(StateCommitmentPool::new()));
 
     let engine_tx_pool = Arc::clone(&transaction_pool);
+    let engine_commitment_pool = Arc::clone(&commitment_pool);
+
     // Spawn a new thread
-    let handle = thread::spawn(move || {
+    let engine_handle = thread::spawn(move || {
         // Create a new Tokio runtime
         let rt = Runtime::new().unwrap();
 
         // Run the async code on the new runtime
         rt.block_on(async {
-            let mut engine = ExecutionEngine::new(&thread_account_state_manager, &thread_block_state_manager, engine_tx_pool);
+            let mut engine = ExecutionEngine::new(&thread_account_state_manager, engine_tx_pool, engine_commitment_pool);
             engine.start().await;
+        });
+    });
+
+    let commitment_tx_pool = Arc::clone(&transaction_pool);
+    let state_commitment_pool = Arc::clone(&commitment_pool);
+    let commitment_handle = thread::spawn(move || {
+        // Create a new Tokio runtime
+        let rt = Runtime::new().unwrap();
+
+        // Run the async code on the new runtime
+        rt.block_on(async {
+            let mut state_commitment = StateCommitment::new(state_commitment_pool, &block_state_manager);
+            state_commitment.start().await;
         });
     });
 
     let _ = start_web_server(Arc::clone(&transaction_pool)).await;
     // Wait for the thread to finish
-    handle.join().unwrap();
+    engine_handle.join().unwrap();
+    commitment_handle.join().unwrap();
 }
 
 async fn start_web_server(transaction_pool: Arc<Mutex<TransactionPool>>) {
     env_logger::init();
 
     let routes = routes(transaction_pool);
-    warp::serve(routes).run(([0, 0, 0, 0], 8080)).await;
+    warp::serve(routes).run(([0, 0, 0, 0], 27182)).await;
 }
 
 pub fn routes(
@@ -118,6 +139,27 @@ fn get_transaction_route(
 
 fn with_value(value: String) -> impl Filter<Extract=(String,), Error=Infallible> + Clone {
     warp::any().map(move || value.clone())
+}
+
+fn load_config() -> AnyResult<Config> {
+    let args: Vec<String> = env::args().collect();
+    let sologger_config_path = if args.len() > 1 {
+        args[1].clone()
+    } else {
+        env::var("SOLOGGER_APP_CONFIG_LOC").unwrap_or("./config/local/sologger-config.json".to_string())
+    };
+
+    trace!("sologger_config_path: {}", sologger_config_path);
+    let mut file = File::open(Path::new(sologger_config_path.as_str()))?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)
+        .expect("Failed to read contents of sologger-config.json");
+
+    let result: serde_json::Value = serde_json::from_str(&contents).unwrap();
+    trace!("SologgerConfig: {}", result.to_string());
+    let sologger_config = serde_json::from_str(&contents).map_err(|_err| ConfigError::Loading)?;
+
+    Ok(sologger_config)
 }
 
 // fn with_config(value: Config) -> impl Filter<Extract = (Config,), Error = Infallible> + Clone {

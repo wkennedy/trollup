@@ -38,36 +38,41 @@ pub struct ZkProofCommitment {
     pub public_key: [u8; 33],
 }
 
-pub struct ZkProofSystem<S: StateRecord> {
-    state_records: Vec<S>,
-}
-
-impl<S: StateRecord> ZkProofSystem<S> {
-    pub fn new(state_records: Vec<S>) -> Self {
-        Self { state_records }
-    }
-
-    pub fn generate_proof(&self) -> ZkProof {
-        let mut hasher = Sha256::new();
-
-        // Hash all transactions
-        for record in &self.state_records {
-            let tx_bytes = borsh::to_vec(&record).unwrap();
-            hasher.update(&tx_bytes);
-        }
-
-        let merkle_root = hasher.finalize().into();
-
-        ZkProof {
-            merkle_root,
-            state_record_count: self.state_records.len() as u64,
-        }
-    }
-
-    pub fn verify_proof(&self, proof: &ZkProof) -> bool {
-        let generated_proof = self.generate_proof();
-
-        generated_proof.merkle_root == proof.merkle_root &&
-            generated_proof.state_record_count == proof.state_record_count
-    }
-}
+// pub trait ZkProofSystem<S: StateRecord> {
+//     fn new(state_records: Vec<S>) -> Proof<Bn245> {
+//
+//     }
+// }
+// pub struct ZkProofSystem<S: StateRecord> {
+//     state_records: Vec<S>,
+// }
+//
+// impl<S: StateRecord> ZkProofSystem<S> {
+//     pub fn new(state_records: Vec<S>) -> Self {
+//         Self { state_records }
+//     }
+//
+//     pub fn generate_proof(&self) -> ZkProof {
+//         let mut hasher = Sha256::new();
+//
+//         // Hash all transactions
+//         for record in &self.state_records {
+//             let tx_bytes = borsh::to_vec(&record).unwrap();
+//             hasher.update(&tx_bytes);
+//         }
+//
+//         let merkle_root = hasher.finalize().into();
+//
+//         ZkProof {
+//             merkle_root,
+//             state_record_count: self.state_records.len() as u64,
+//         }
+//     }
+//
+//     pub fn verify_proof(&self, proof: &ZkProof) -> bool {
+//         let generated_proof = self.generate_proof();
+//
+//         generated_proof.merkle_root == proof.merkle_root &&
+//             generated_proof.state_record_count == proof.state_record_count
+//     }
+// }

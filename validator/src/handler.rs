@@ -1,10 +1,8 @@
-use serde_json::json;
-use trollup_zk::prove::ProofPackagePrepared;
-use trollup_zk::verify::verify_prepared_proof_package;
-use warp::{http::StatusCode, Rejection, Reply};
-use warp::reply::json;
 use crate::commitment::verify_and_commit;
-// use crate::config::Config;
+use base64::{engine::general_purpose, Engine as _};
+use trollup_zk::prove::ProofPackagePrepared;
+use warp::reply::json;
+use warp::{http::StatusCode, Rejection, Reply};
 
 
 // lazy_static! {
@@ -27,18 +25,29 @@ type Result<T> = std::result::Result<T, Rejection>;
 )]
 pub async fn prove(proof_package_prepared: ProofPackagePrepared, new_state_root: String) -> Result<impl Reply> {
     //todo validate input
-    let new_state_root_bytes: &[u8; 32] = <&[u8; 32]>::try_from(new_state_root.as_bytes()).unwrap();
-    let result = verify_and_commit(proof_package_prepared, new_state_root_bytes.clone()).await;
-    match result {
-        Ok(is_valid) => {
-            println!("result {:?}", &is_valid);
-            Ok(json(&""))
+    let state_root_result = general_purpose::STANDARD.decode(new_state_root);
+    match state_root_result {
+        Ok(state_root) => {
+            let new_state_root_bytes: &[u8; 32] = <&[u8; 32]>::try_from(state_root.as_bytes()).unwrap();
+            let result = verify_and_commit(proof_package_prepared, new_state_root_bytes.clone()).await;
+            match result {
+                Ok(is_valid) => {
+                    println!("result {:?}", &is_valid);
+                    Ok(json(&""))
+                }
+                Err(error) => {
+                    println!("result {:?}", &error);
+                    Ok(json(&""))
+                }
+            }
         }
+
         Err(error) => {
             println!("result {:?}", &error);
             Ok(json(&""))
         }
     }
+
 }
 
 pub async fn health_handler() -> Result<impl Reply> {

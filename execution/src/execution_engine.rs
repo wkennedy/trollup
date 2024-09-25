@@ -12,15 +12,14 @@ use solana_svm::account_loader::{LoadedTransaction, TransactionLoadResult};
 use solana_svm::transaction_processor::{LoadAndExecuteSanitizedTransactionsOutput, TransactionProcessingConfig, TransactionProcessingEnvironment};
 use solana_svm::transaction_results::TransactionExecutionResult;
 use state::account_state::AccountState;
-use state::block::Block;
-use state::state_record;
 use state::state_record::StateRecord;
 use state::transaction::TrollupTransaction;
-use state_commitment::state_commitment_layer::StateCommitmentLayer;
+use state_commitment::state_commitment_pool::{StateCommitmentPool, StatePool};
 use state_management::account_loader::TrollupAccountLoader;
 use state_management::state_management::{ManageState, StateManager};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use state_commitment::state_commitment_layer::StateCommitmentPackage;
 
 #[derive(PartialEq, Eq, Debug)]
 enum EngineState {
@@ -43,23 +42,19 @@ enum EngineState {
 /// - `transaction_pool`: a `TransactionPool` instance for managing the pool of unprocessed transactions.
 /// - `account_state_commitment`: a `StateCommitmentLayer` instance for committing the state changes of accounts.
 /// - `transaction_state_commitment`: a `StateCommitmentLayer` instance for committing the state changes of transactions.
-pub struct ExecutionEngine<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>> {
+pub struct ExecutionEngine<'a, A: ManageState<Record=AccountState>> {
     account_state_management: &'a StateManager<A>,
-    block_state_management: &'a StateManager<B>,
     transaction_pool: Arc<Mutex<TransactionPool>>,
-    account_state_commitment: StateCommitmentLayer<AccountState>,
-    transaction_state_commitment: StateCommitmentLayer<TrollupTransaction>,
+    commitment_pool: Arc<Mutex<StateCommitmentPool<AccountState>>>,
     engine_state: EngineState
 }
 
-impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>> ExecutionEngine<'a, A, B> {
-    pub fn new(account_state_management: &'a StateManager<A>, block_state_management: &'a StateManager<B>, transaction_pool: Arc<Mutex<TransactionPool>>) -> Self {
+impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
+    pub fn new(account_state_management: &'a StateManager<A>, transaction_pool: Arc<Mutex<TransactionPool>>, commitment_pool: Arc<Mutex<StateCommitmentPool<AccountState>>>) -> Self {
         Self {
             account_state_management,
-            block_state_management,
             transaction_pool,
-            account_state_commitment: StateCommitmentLayer::<AccountState>::new(vec![]),
-            transaction_state_commitment: StateCommitmentLayer::<TrollupTransaction>::new(vec![]),
+            commitment_pool,
             engine_state: EngineState::Initialized,
         }
     }
@@ -141,47 +136,57 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>> Exec
 
         let successful_outcomes = extract_successful_transactions(&tx_map, &loaded_txs, &exec_results);
 
-        let successful_txs: Vec<TrollupTransaction> = Vec::new();
+        let mut successful_txs: Vec<TrollupTransaction> = Vec::new();
         let mut transaction_ids = Vec::with_capacity(successful_outcomes.len());
         let mut account_states: Vec<AccountState> = Vec::new();
         for outcome in successful_outcomes {
             transaction_ids.push(outcome.trollup_transaction.get_key().unwrap());
             account_states.extend(outcome.accounts);
-            self.transaction_state_commitment.update_record(outcome.trollup_transaction.clone());
+            successful_txs.push(outcome.trollup_transaction);
+            // self.transaction_state_commitment.update_record(outcome.trollup_transaction.clone());
         }
 
-        let transactions_zk_gen = state_record::ZkProofSystem::<TrollupTransaction>::new(successful_txs.clone());
+        // let transactions_zk_gen = state_record::ZkProofSystem::<TrollupTransaction>::new(successful_txs.clone());
 
-        let latest_block_id = self.block_state_management.get_latest_block_id().unwrap_or(Block::get_id(0));
-        let latest_block = self.block_state_management.get_state_record(&latest_block_id).unwrap_or(Block::default());
-        let next_block_number = latest_block.block_number + 1;
+        // let latest_block_id = self.block_state_management.get_latest_block_id().unwrap_or(Block::get_id(0));
+        // let latest_block = self.block_state_management.get_state_record(&latest_block_id).unwrap_or(Block::default());
+        // let next_block_number = latest_block.block_number + 1;
 
+        let commitment_package = StateCommitmentPackage {
+            state_records: account_states,
+            transactions: successful_txs,
+            transaction_ids,
+        };
 
-        let account_zk_gen = state_record::ZkProofSystem::<AccountState>::new(account_states.clone());
-        let accounts_zk_proof = account_zk_gen.generate_proof();
-        let tx_zk_proof = transactions_zk_gen.generate_proof();
+        let mut commit_pool = self.commitment_pool.lock().unwrap();
+        commit_pool.add(commitment_package);
 
+        // TODO create commitment package and put into state commitment pool
 
-        let account_addresses: Vec<[u8; 32]> = account_states
-            .iter()
-            .map(|state| {
-                    println!("Account updated: {:?}", &state);
-                    self.account_state_management.set_state_record(&state.address.to_bytes(), state.clone());
-                    self.account_state_commitment.update_record(state.clone());
-                state.address.to_bytes()
-            })
-            .collect();
+        // let account_zk_gen = state_record::ZkProofSystem::<AccountState>::new(account_states.clone());
+        // let accounts_zk_proof = account_zk_gen.generate_proof();
+        // let tx_zk_proof = transactions_zk_gen.generate_proof();
 
-        let account_state_root = self.account_state_commitment.get_state_root().expect("Error getting account state root");
-        let transaction_state_root = self.transaction_state_commitment.get_state_root().expect("Error getting transaction state root");
-
-        let block = Block::new(next_block_number, Box::from(transaction_state_root), tx_zk_proof.clone(),  Box::from(account_state_root), accounts_zk_proof.clone(), transaction_ids, account_addresses);
-        println!("Saving latest block: {:?}", &block.get_key());
-        self.block_state_management.set_latest_block_id(&block.get_key().unwrap());
-        self.block_state_management.set_state_record(&block.get_key().unwrap(), block.clone());
-        self.block_state_management.commit();
-
-        self.account_state_commitment.commit_to_l1(&accounts_zk_proof).await;
+        // let account_addresses: Vec<[u8; 32]> = account_states
+        //     .iter()
+        //     .map(|state| {
+        //             println!("Account updated: {:?}", &state);
+        //             self.account_state_management.set_state_record(&state.address.to_bytes(), state.clone());
+        //             self.account_state_commitment.update_record(state.clone());
+        //         state.address.to_bytes()
+        //     })
+        //     .collect();
+        //
+        // let account_state_root = self.account_state_commitment.get_state_root().expect("Error getting account state root");
+        // let transaction_state_root = self.transaction_state_commitment.get_state_root().expect("Error getting transaction state root");
+        //
+        // let block = Block::new(next_block_number, Box::from(transaction_state_root), Box::from(account_state_root), accounts_zk_proof.clone(), transaction_ids, account_addresses);
+        // println!("Saving latest block: {:?}", &block.get_key());
+        // self.block_state_management.set_latest_block_id(&block.get_key().unwrap());
+        // self.block_state_management.set_state_record(&block.get_key().unwrap(), block.clone());
+        // self.block_state_management.commit();
+        //
+        // self.account_state_commitment.commit_to_l1(&accounts_zk_proof).await;
     }
 
     //TODO clean up functions
@@ -203,7 +208,6 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>> Exec
     // }
 
     pub fn execute_svm_transactions(&self, transactions: Vec<SanitizedTransaction>) -> LoadAndExecuteSanitizedTransactionsOutput {
-        // PayTube default configs.
         let compute_budget = ComputeBudget::default();
         let feature_set = FeatureSet::all_enabled();
         let fee_structure = FeeStructure::default();

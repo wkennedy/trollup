@@ -33,11 +33,6 @@ impl ForkGraph for TrollupForkGraph {
     // }
 }
 
-/// This function encapsulates some initial setup required to tweak the
-/// `TransactionBatchProcessor` for use within PayTube.
-///
-/// We're simply configuring the mocked fork graph on the SVM API's program
-/// cache, then adding the System program to the processor's builtins.
 pub(crate) fn create_transaction_batch_processor<CB: TransactionProcessingCallback>(
     callbacks: &CB,
     feature_set: &FeatureSet,
@@ -108,9 +103,6 @@ pub(crate) fn create_transaction_batch_processor<CB: TransactionProcessingCallba
     (processor, fork_graph)
 }
 
-/// This functions is also a mock. In the Agave validator, the bank pre-checks
-/// transactions before providing them to the SVM API. We mock this step in
-/// PayTube, since we don't need to perform such pre-checks.
 pub(crate) fn get_transaction_check_results(
     len: usize,
     lamports_per_signature: u64,

@@ -17,13 +17,11 @@ impl Handler {
         Handler { transaction_pool }
     }
 
-
     pub async fn get_transaction_handler(&self, signature: String) -> Result<impl Reply> {
         // Implement logic to get transaction from pool or storage
         // For now, we'll just return a placeholder response
         Ok(json(&format!("Transaction details for signature: {}", signature)))
     }
-
 
     pub async fn send_transaction_handler(&self, transaction: Transaction) -> Result<impl Reply> {
         let mut pool = self.transaction_pool.lock().unwrap();

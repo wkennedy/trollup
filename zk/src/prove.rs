@@ -7,7 +7,7 @@ use ark_snark::SNARK;
 use borsh::{BorshDeserialize, BorshSerialize};
 use rand::thread_rng;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Read, Write};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use state::account_state::AccountState;
@@ -65,6 +65,30 @@ pub fn setup(save_keys: bool) -> (ProvingKey<Bn254>, VerifyingKey<Bn254>){
     };
 
     (proving_key, verifying_key)
+}
+
+pub fn generate_proof_load_keys(accounts: Vec<AccountState>) -> (ProofPackageLite, ProofPackagePrepared, ProofPackage) {
+    // Open the file
+    let mut pk_file = File::open("pk.bin").expect("");
+
+    // Read the contents of the file
+    let mut pk_buffer = Vec::new();
+    pk_file.read_to_end(&mut pk_buffer).expect("");
+
+    // Deserialize the buffer into a VerifyingKey
+    let pk = ProvingKey::<Bn254>::deserialize_uncompressed_unchecked(&pk_buffer[..]).expect("");
+
+    // Open the file
+    let mut vk_file = File::open("vk.bin").expect("");
+
+    // Read the contents of the file
+    let mut vk_buffer = Vec::new();
+    vk_file.read_to_end(&mut vk_buffer).expect("");
+
+    // Deserialize the buffer into a VerifyingKey
+    let vk = VerifyingKey::<Bn254>::deserialize_uncompressed_unchecked(&vk_buffer[..]).expect("");
+
+    generate_proof(&pk, &vk, accounts)
 }
 
 pub fn generate_proof(proving_key: &ProvingKey<Bn254>, verifying_key: &VerifyingKey<Bn254>, accounts: Vec<AccountState>) -> (ProofPackageLite, ProofPackagePrepared, ProofPackage) {

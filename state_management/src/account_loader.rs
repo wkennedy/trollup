@@ -1,10 +1,3 @@
-//! PayTube's "account loader" component, which provides the SVM API with the
-//! ability to load accounts for PayTube channels.
-//!
-//! The account loader is a simple example of an RPC client that can first load
-//! an account from the base chain, then cache it locally within the protocol
-//! for the duration of the channel.
-
 use std::str::FromStr;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::account::Account;
@@ -22,10 +15,6 @@ use log::debug;
 use state::account_state::AccountState;
 use crate::state_management::{ManageState, StateManager};
 
-/// An account loading mechanism to hoist accounts from the base chain up to
-/// an active PayTube channel.
-///
-/// Employs a simple cache mechanism to ensure accounts are only loaded once.
 pub struct TrollupAccountLoader<'a, A: ManageState> {
     cache: RwLock<HashMap<[u8; 32], AccountSharedData>>,
     account_state_management: &'a StateManager<A>,
