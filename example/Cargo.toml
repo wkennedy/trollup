@@ -9,7 +9,6 @@ solana-sdk = "=2.0.5"
 solana-logger = "=2.0.5"
 tokio = "1.39.3"
 state = {path = "../state" }
-merkle = {path = "../merkle"}
 state_commitment = {path = "../state_commitment"}
 state_management = {path = "../state_management"}
 execution = {path = "../execution"}

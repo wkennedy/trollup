@@ -2,6 +2,6 @@
 resolver = "2"
 
 members = [
-    "state", "merkle", "state_commitment", "execution", "example", "state_management", "zk"]
+    "state", "state_commitment", "execution", "example", "state_management", "zk"]
 
 exclude = ["api", "validator"]
