@@ -1,6 +1,5 @@
 use crate::state_commitment_layer::StateCommitmentPackage;
 use state::state_record::StateRecord;
-use state_management::state_management::ManageState;
 use std::collections::VecDeque;
 
 pub trait StatePool {
@@ -15,7 +14,7 @@ pub trait StatePool {
 pub struct StateCommitmentPool<S: StateRecord> {
     pool: VecDeque<StateCommitmentPackage<S>>,
 }
-impl <S: StateRecord> StatePool for StateCommitmentPool<S> {
+impl<S: StateRecord> StatePool for StateCommitmentPool<S> {
     type Record = S;
 
     fn new() -> Self {
@@ -39,7 +38,7 @@ impl <S: StateRecord> StatePool for StateCommitmentPool<S> {
     fn get_next_chunk(&mut self, chunk: u32) -> Vec<StateCommitmentPackage<S>> {
         let mut packages = Vec::new();
         if self.pool_size() == 0 {
-            return vec![]
+            return vec![];
         }
 
         let to = chunk.min(self.pool_size() as u32);

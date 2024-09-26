@@ -1,11 +1,10 @@
+use crate::config::Config;
+use execution::transaction_pool::TransactionPool;
 use lazy_static::lazy_static;
 use solana_sdk::transaction::Transaction;
-use warp::{http::StatusCode, reply::json, Filter, Rejection, Reply};
-use warp::reply::Json;
-use state::transaction::{convert_to_trollup_transaction, TrollupTransaction};
+use state::transaction::convert_to_trollup_transaction;
 use std::sync::{Arc, Mutex};
-use execution::transaction_pool::TransactionPool;
-use crate::config::Config;
+use warp::{http::StatusCode, reply::json, Filter, Rejection, Reply};
 
 type Result<T> = std::result::Result<T, Rejection>;
 
@@ -44,6 +43,6 @@ impl Handler {
 // Function to create filter with Handler
 pub fn with_handler(
     transaction_pool: Arc<Mutex<TransactionPool>>,
-) -> impl Filter<Extract = (Handler,), Error = std::convert::Infallible> + Clone {
+) -> impl Filter<Extract=(Handler,), Error=std::convert::Infallible> + Clone {
     warp::any().map(move || Handler::new(Arc::clone(&transaction_pool)))
 }

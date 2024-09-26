@@ -19,13 +19,14 @@ use state_management::account_loader::TrollupAccountLoader;
 use state_management::state_management::{ManageState, StateManager};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use solana_program_runtime::log_collector::log::info;
 use state_commitment::state_commitment_layer::StateCommitmentPackage;
 
 #[derive(PartialEq, Eq, Debug)]
 enum EngineState {
     Running,
     Stopped,
-    Initialized
+    Initialized,
 }
 
 /// This struct represents an execution engine for managing the state of accounts, transactions, and blocks.
@@ -46,10 +47,19 @@ pub struct ExecutionEngine<'a, A: ManageState<Record=AccountState>> {
     account_state_management: &'a StateManager<A>,
     transaction_pool: Arc<Mutex<TransactionPool>>,
     commitment_pool: Arc<Mutex<StateCommitmentPool<AccountState>>>,
-    engine_state: EngineState
+    engine_state: EngineState,
 }
 
 impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
+    /// Creates a new instance of the `ExecutionEngine`.
+    ///
+    /// # Parameters
+    /// - `account_state_management`: A reference to a `StateManager` instance for managing the state of accounts.
+    /// - `transaction_pool`: An atomic reference counter to a thread-safe `TransactionPool` instance for managing the pool of unprocessed transactions.
+    /// - `commitment_pool`: An atomic reference counter to a thread-safe `StateCommitmentPool` instance for committing the state changes of accounts.
+    ///
+    /// # Returns
+    /// A new `ExecutionEngine` instance initialized with the provided `StateManager`, `TransactionPool`, and `StateCommitmentPool`.
     pub fn new(account_state_management: &'a StateManager<A>, transaction_pool: Arc<Mutex<TransactionPool>>, commitment_pool: Arc<Mutex<StateCommitmentPool<AccountState>>>) -> Self {
         Self {
             account_state_management,
@@ -65,42 +75,12 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
     /// It checks if the transaction pool size is greater than or equal to 4.
     /// If it is, it calls the `execute_block` method.
     /// If the pool size is less than 4, it breaks out of the loop.
-    ///
-    /// # Examples
-    /// ```rust
-    /// # use async_std::task;
-    /// # struct TransactionPool {
-    /// #     pub fn pool_size(&self) -> i32 { 0 }
-    /// # }
-    /// # struct Application {
-    /// #     pub transaction_pool: TransactionPool,
-    /// # }
-    /// # impl Application {
-    /// #     pub async fn execute_block(&mut self) {}
-    /// #     pub async fn start(&mut self) {
-    ///         loop {
-    ///             if self.transaction_pool.pool_size() >= 4 {
-    ///                 self.execute_block().await;
-    ///             } else {
-    ///                 break;
-    ///             }
-    ///         }
-    ///     }
-    /// # }
-    ///
-    /// # fn main() {
-    /// #     let mut app = Application {
-    /// #         transaction_pool: TransactionPool {},
-    /// #     };
-    /// #     let _ = task::block_on(app.start());
-    /// # }
-    /// ```
     pub async fn start(&mut self) {
         self.engine_state = EngineState::Running;
-        println!("Execution Engine started.");
+        info!("Execution Engine started.");
         loop {
             if self.engine_state == EngineState::Stopped {
-                println!("Execution Engine stopped.");
+                info!("Execution Engine stopped.");
                 break;
             } else {
                 self.execute_block().await;
@@ -109,17 +89,17 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
     }
 
     pub async fn stop(&mut self) {
-        println!("Stopping Execution Engine");
+        info!("Stopping Execution Engine");
         self.engine_state = EngineState::Stopped;
     }
 
     /// Executes a block by processing a set of transactions.
     pub async fn execute_block(&mut self) {
-        let mut tx_pool =  self.transaction_pool.lock().unwrap();
+        let mut tx_pool = self.transaction_pool.lock().unwrap();
         let transactions = tx_pool.get_next_transactions(4);
         drop(tx_pool);
         if transactions.is_empty() {
-            return
+            return;
         }
 
         let sanitized_txs = batch_sanitize_transactions(&transactions);
@@ -127,7 +107,7 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
         // Create a mapping of signatures to transactions
         let tx_map: HashMap<[u8; 32], &TrollupTransaction> = transactions
             .iter()
-            .map(|tx| (tx.get_key().unwrap(), tx))
+            .map(|tx| (tx.get_key(), tx))
             .collect();
 
         let results = self.execute_svm_transactions(sanitized_txs.clone());
@@ -141,17 +121,10 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
         let mut transaction_ids = Vec::with_capacity(successful_outcomes.len());
         let mut account_states: Vec<AccountState> = Vec::new();
         for outcome in successful_outcomes {
-            transaction_ids.push(outcome.trollup_transaction.get_key().unwrap());
+            transaction_ids.push(outcome.trollup_transaction.get_key());
             account_states.extend(outcome.accounts);
             successful_txs.push(outcome.trollup_transaction);
-            // self.transaction_state_commitment.update_record(outcome.trollup_transaction.clone());
         }
-
-        // let transactions_zk_gen = state_record::ZkProofSystem::<TrollupTransaction>::new(successful_txs.clone());
-
-        // let latest_block_id = self.block_state_management.get_latest_block_id().unwrap_or(Block::get_id(0));
-        // let latest_block = self.block_state_management.get_state_record(&latest_block_id).unwrap_or(Block::default());
-        // let next_block_number = latest_block.block_number + 1;
 
         let commitment_package = StateCommitmentPackage {
             state_records: account_states,
@@ -161,52 +134,8 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
 
         let mut commit_pool = self.commitment_pool.lock().unwrap();
         commit_pool.add(commitment_package);
-
-        // TODO create commitment package and put into state commitment pool
-
-        // let account_zk_gen = state_record::ZkProofSystem::<AccountState>::new(account_states.clone());
-        // let accounts_zk_proof = account_zk_gen.generate_proof();
-        // let tx_zk_proof = transactions_zk_gen.generate_proof();
-
-        // let account_addresses: Vec<[u8; 32]> = account_states
-        //     .iter()
-        //     .map(|state| {
-        //             println!("Account updated: {:?}", &state);
-        //             self.account_state_management.set_state_record(&state.address.to_bytes(), state.clone());
-        //             self.account_state_commitment.update_record(state.clone());
-        //         state.address.to_bytes()
-        //     })
-        //     .collect();
-        //
-        // let account_state_root = self.account_state_commitment.get_state_root().expect("Error getting account state root");
-        // let transaction_state_root = self.transaction_state_commitment.get_state_root().expect("Error getting transaction state root");
-        //
-        // let block = Block::new(next_block_number, Box::from(transaction_state_root), Box::from(account_state_root), accounts_zk_proof.clone(), transaction_ids, account_addresses);
-        // println!("Saving latest block: {:?}", &block.get_key());
-        // self.block_state_management.set_latest_block_id(&block.get_key().unwrap());
-        // self.block_state_management.set_state_record(&block.get_key().unwrap(), block.clone());
-        // self.block_state_management.commit();
-        //
-        // self.account_state_commitment.commit_to_l1(&accounts_zk_proof).await;
     }
 
-    //TODO clean up functions
-    // fn process_successful_transaction(&mut self, outcome: ExecutionOutcome) {
-    //     // Process the successful transaction
-    //     println!("Processing successful transaction: {:?}", outcome.trollup_transaction.get_key());
-    //
-    //     // Update accounts
-    //     for account in outcome.accounts {
-    //         self.update_account_state(&account);
-    //     }
-    //
-    //     // Additional processing as needed
-    // }
-    //
-    // fn update_account_state(&mut self, account: &AccountInfo) {
-    //     // Update the account state in your system
-    //     // This could involve updating a database, in-memory state, etc.
-    // }
 
     pub fn execute_svm_transactions(&self, transactions: Vec<SanitizedTransaction>) -> LoadAndExecuteSanitizedTransactionsOutput {
         let compute_budget = ComputeBudget::default();
@@ -271,7 +200,6 @@ fn extract_successful_transactions(
     loaded_txs: &[TransactionLoadResult],
     exec_results: &[TransactionExecutionResult],
 ) -> Vec<ExecutionOutcome> {
-
     let mut execution_outcomes = Vec::new();
     for (i, (_key, value)) in tx_map.iter().enumerate() {
         let loaded_tx = &loaded_txs[i].clone().unwrap();

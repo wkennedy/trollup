@@ -1,6 +1,5 @@
-use state_management::state_management::ManageState;
-use std::collections::VecDeque;
 use state::transaction::TrollupTransaction;
+use std::collections::VecDeque;
 
 /// TransactionPool is a struct that represents a pool of transactions.
 ///

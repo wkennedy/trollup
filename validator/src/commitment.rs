@@ -4,6 +4,7 @@ use crate::error::ValidationError::ProofVerificationFailed;
 use ark_serialize::CanonicalSerializeHashExt;
 use borsh::to_vec;
 use libsecp256k1::{Message, PublicKey, SecretKey};
+use log::info;
 use sha2::Sha256;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::keccak;
@@ -47,7 +48,7 @@ fn create_and_sign_commitment(
         verifier_signature: signature_bytes,
         recovery_id: recovery_id.serialize(),
         public_key,
-        new_state_root: new_state_root,
+        new_state_root,
     })
 }
 
@@ -60,7 +61,7 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
     let proof_package: ProofPackage = proof_package_prepared.into();
     let is_valid = verify_proof_package(&proof_package);
 
-    println!("Proof is valid. Creating commitment.");
+    info!("Proof is valid. Creating commitment.");
 
     if !is_valid {
         return Err(ProofVerificationFailed);
@@ -80,11 +81,12 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
     let payer = Keypair::new();
     let airdrop_amount = 1_000_000_000; // 1 SOL in lamports
     match request_airdrop(&client, &payer.pubkey(), airdrop_amount).await {
-        Ok(_) => println!("Airdrop successful!"),
+        Ok(_) => info!("Airdrop successful!"),
         Err(err) => eprintln!("Airdrop failed: {}", err),
     }
 
     // Your program ID (replace with your actual program ID)
+    // TODO get program ID from config
     let program_id = Pubkey::from_str("2cQVZYvHb2Lw9jN1GcWEJ3k9rBBkyxnQdMFUbpabVt41").expect("");
 
     // Create and sign the commitment (this would normally be done by the trusted off-chain verifier)
@@ -131,11 +133,11 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
     // Send and confirm transaction
     match client.send_and_confirm_transaction(&transaction).await {
         Ok(signature) => {
-            println!("Transaction succeeded: {:?}", &signature);
+            info!("Transaction succeeded: {:?}", &signature);
             Ok(true)
         }
         Err(err) => {
-            println!("Error sending transaction: {}", err);
+            info!("Error sending transaction: {}", err);
             Err(CommitmentTransactionFailed)
         }
     }

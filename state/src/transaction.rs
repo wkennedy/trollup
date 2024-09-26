@@ -11,9 +11,9 @@ use solana_sdk::transaction::{SanitizedTransaction, Transaction};
 use std::io::{Error, ErrorKind};
 
 impl StateRecord for TrollupTransaction {
-    fn get_key(&self) -> Option<[u8; 32]> {
+    fn get_key(&self) -> [u8; 32] {
         let hash: [u8; 32] = Sha256::digest(&self.signatures[0]).into();
-        Some(hash)
+        hash
     }
 }
 
@@ -179,7 +179,7 @@ pub fn convert_to_trollup_transaction(tx: Transaction) -> Result<TrollupTransact
         header: [tx.message.header.num_required_signatures, tx.message.header.num_readonly_signed_accounts, tx.message.header.num_readonly_unsigned_accounts],
         account_keys: tx.message.account_keys
             .into_iter()
-            .map(|account_key|account_key.to_bytes())
+            .map(|account_key| account_key.to_bytes())
             .collect(),
         recent_blockhash: tx.message.recent_blockhash.to_bytes(),
         instructions: tx.message.instructions

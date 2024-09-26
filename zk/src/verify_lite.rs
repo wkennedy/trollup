@@ -6,6 +6,7 @@ use ark_bn254::Bn254;
 use ark_ff::PrimeField;
 use ark_groth16::{Proof, VerifyingKey};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
+use log::info;
 use num_bigint::BigUint;
 use solana_program::alt_bn128::compression::prelude::convert_endianness;
 use solana_program::alt_bn128::prelude::{alt_bn128_addition, alt_bn128_multiplication, alt_bn128_pairing, ALT_BN128_PAIRING_ELEMENT_LEN};
@@ -20,13 +21,13 @@ pub fn verify_proof(proof_package: ProofPackagePrepared) -> Result<bool, AltBn12
 
     // Check proof size
     if proof_package.proof.len() != 256 {
-        println!("Proof size is incorrect: {} bytes", proof_package.proof.len());
+        info!("Proof size is incorrect: {} bytes", proof_package.proof.len());
         return Err(AltBn128Error::InvalidInputData);
     }
 
     // Check public inputs size
     if proof_package.public_inputs.len() != 64 {
-        println!("Public inputs size is incorrect: {} bytes", proof_package.public_inputs.len());
+        info!("Public inputs size is incorrect: {} bytes", proof_package.public_inputs.len());
         return Err(AltBn128Error::InvalidInputData);
     }
 
@@ -73,7 +74,7 @@ pub fn verify_proof(proof_package: ProofPackagePrepared) -> Result<bool, AltBn12
 
     // Check that we have the correct number of pairing elements
     if pairing_input.len() != 4 * ALT_BN128_PAIRING_ELEMENT_LEN {
-        println!("Incorrect pairing input size: {} bytes", pairing_input.len());
+        info!("Incorrect pairing input size: {} bytes", pairing_input.len());
         return Err(AltBn128Error::InvalidInputData);
     }
 
@@ -92,13 +93,13 @@ pub fn verify_groth16_proof(
 
     // Check proof size
     if proof_package.proof.len() != 256 {
-        println!("Proof size is incorrect: {} bytes", &proof_package.proof.len());
+        info!("Proof size is incorrect: {} bytes", &proof_package.proof.len());
         return Err(AltBn128Error::InvalidInputData);
     }
 
     // Check public inputs size
     // if public_inputs.len() != 64 {
-    //     println!("Public inputs size is incorrect: {} bytes", public_inputs.len());
+    //     info!("Public inputs size is incorrect: {} bytes", public_inputs.len());
     //     return Err(AltBn128Error::InvalidInputData);
     // }
 
@@ -134,11 +135,11 @@ pub fn verify_groth16_proof(
 
     match verifier.verify_unchecked() {
         Ok(true) => {
-            println!("Proof verification succeeded");
+            info!("Proof verification succeeded");
             Ok(true)
         }
         Ok(false) | Err(_) => {
-            println!("Proof verification failed");
+            info!("Proof verification failed");
             Ok(false)
         }
     }

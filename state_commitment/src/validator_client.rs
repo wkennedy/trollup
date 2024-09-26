@@ -6,6 +6,7 @@ use base64::{Engine as _, engine::general_purpose};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApiResponse {
+    //TODO update this for the actual response from the validator
     pub message: String,
 }
 
@@ -46,25 +47,3 @@ impl ValidatorClient {
         }
     }
 }
-//
-// #[tokio::main]
-// async fn main() -> Result<()> {
-//     let client = ValidatorClient::new("http://localhost:27183");
-//
-//     // Check health
-//     let health_status = client.health_check().await?;
-//     println!("Health status: {}", health_status);
-//
-//     // Example proof submission
-//     let proof_package = ProofPackagePrepared {
-//         proof_data: "example_proof_data".to_string(),
-//     };
-//     let new_state_root = "example_new_state_root";
-//
-//     match client.prove(proof_package, new_state_root).await {
-//         Ok(response) => println!("Proof verification response: {:?}", response),
-//         Err(e) => eprintln!("Error submitting proof: {}", e),
-//     }
-//
-//     Ok(())
-// }

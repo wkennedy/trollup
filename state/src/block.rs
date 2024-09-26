@@ -1,7 +1,6 @@
+use crate::state_record::StateRecord;
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use sha2::{Digest, Sha256};
-use solana_sdk::pubkey::Pubkey;
-use crate::state_record::{StateRecord, ZkProof};
 
 // TODO add transaction proof?
 #[derive(Debug, BorshDeserialize, BorshSerialize, Clone, Default)]
@@ -39,8 +38,8 @@ impl Block {
 }
 
 impl StateRecord for Block {
-    fn get_key(&self) -> Option<[u8; 32]> {
-        Some(self.id)
+    fn get_key(&self) -> [u8; 32] {
+        self.id
     }
 
 }

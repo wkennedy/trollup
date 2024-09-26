@@ -1,5 +1,3 @@
-//! A helper to initialize Solana SVM API's `TransactionBatchProcessor`.
-
 use {
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
     solana_compute_budget::compute_budget::ComputeBudget,
@@ -15,8 +13,9 @@ use {
     solana_system_program::system_processor,
     std::sync::{Arc, RwLock},
 };
+
 /// In order to use the `TransactionBatchProcessor`, another trait - Solana
-/// Program Runtime's `ForkGraph` - must be implemented, to tell the batch
+/// Program Runtimes `ForkGraph` - must be implemented, to tell the batch
 /// processor how to work across forks.
 ///
 /// Since Trollup doesn't use slots or forks, this implementation is mocked.
@@ -70,7 +69,7 @@ pub(crate) fn create_transaction_batch_processor<CB: TransactionProcessingCallba
                         elf_bytes.len(),
                         &mut LoadProgramMetrics::default(),
                     )
-                    .unwrap(),
+                        .unwrap(),
                 ),
             );
         }
@@ -108,7 +107,7 @@ pub(crate) fn get_transaction_check_results(
     lamports_per_signature: u64,
 ) -> Vec<transaction::Result<CheckedTransactionDetails>> {
     vec![
-        transaction::Result::Ok(CheckedTransactionDetails {
+        Ok(CheckedTransactionDetails {
             nonce: None,
             lamports_per_signature,
         });

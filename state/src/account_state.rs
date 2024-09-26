@@ -2,7 +2,6 @@ use crate::state_record::StateRecord;
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_sdk::account::{Account, AccountSharedData};
 use solana_sdk::clock::Epoch;
-use solana_sdk::instruction::Instruction;
 use solana_sdk::pubkey::Pubkey;
 
 /// Represents the state of an account.
@@ -22,8 +21,8 @@ pub struct AccountState {
 }
 
 impl StateRecord for AccountState {
-    fn get_key(&self) -> Option<[u8; 32]> {
-        Some(self.address.to_bytes())
+    fn get_key(&self) -> [u8; 32] {
+        self.address.to_bytes()
     }
 }
 
@@ -54,9 +53,3 @@ impl Into<AccountSharedData> for AccountState {
         AccountSharedData::from(account)
     }
 }
-
-// impl From<AccountState> for AccountSharedData {
-//     fn from(other: Account) -> Self {
-//         AccountSharedData::from(other)
-//     }
-// }

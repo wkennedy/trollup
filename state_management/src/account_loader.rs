@@ -1,6 +1,5 @@
 use std::str::FromStr;
 use solana_client::rpc_client::RpcClient;
-use solana_sdk::account::Account;
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::native_loader;
 use {
@@ -15,6 +14,7 @@ use log::debug;
 use state::account_state::AccountState;
 use crate::state_management::{ManageState, StateManager};
 
+//TODO need to mega fix this for real
 pub struct TrollupAccountLoader<'a, A: ManageState> {
     cache: RwLock<HashMap<[u8; 32], AccountSharedData>>,
     account_state_management: &'a StateManager<A>,
@@ -26,11 +26,12 @@ impl<'a, A: ManageState<Record=AccountState>> TrollupAccountLoader<'a, A> {
         Self {
             cache: RwLock::new(HashMap::new()),
             account_state_management,
-            rpc_client: RpcClient::new_with_commitment("http://127.0.0.1:8899".to_string(), CommitmentConfig::confirmed())
+            rpc_client: RpcClient::new_with_commitment("http://127.0.0.1:8899".to_string(), CommitmentConfig::confirmed()) //TODO load from config
         }
     }
 }
 
+// TODO get accounts from state management
 /// SVM implementation of the `AccountLoader` plugin trait.
 ///
 /// In the Agave validator, this implementation is `Bank`.

@@ -67,7 +67,7 @@ pub fn setup(save_keys: bool) -> (ProvingKey<Bn254>, VerifyingKey<Bn254>){
     (proving_key, verifying_key)
 }
 
-pub fn generate_proof_load_keys(accounts: Vec<AccountState>) -> (ProofPackageLite, ProofPackagePrepared, ProofPackage) {
+pub fn generate_proof_load_keys(accounts: &Vec<AccountState>) -> (ProofPackageLite, ProofPackagePrepared, ProofPackage) {
     // Open the file
     let mut pk_file = File::open("pk.bin").expect("");
 
@@ -91,10 +91,10 @@ pub fn generate_proof_load_keys(accounts: Vec<AccountState>) -> (ProofPackageLit
     generate_proof(&pk, &vk, accounts)
 }
 
-pub fn generate_proof(proving_key: &ProvingKey<Bn254>, verifying_key: &VerifyingKey<Bn254>, accounts: Vec<AccountState>) -> (ProofPackageLite, ProofPackagePrepared, ProofPackage) {
+pub fn generate_proof(proving_key: &ProvingKey<Bn254>, verifying_key: &VerifyingKey<Bn254>, accounts: &Vec<AccountState>) -> (ProofPackageLite, ProofPackagePrepared, ProofPackage) {
     let rng = &mut thread_rng();
 
-    let account_state_circuit = AccountStateCircuit::new(accounts);
+    let account_state_circuit = AccountStateCircuit::new(accounts.clone());
     let public_inputs = account_state_circuit.public_inputs();
 
     let proof = Groth16::<Bn254>::prove(&proving_key,

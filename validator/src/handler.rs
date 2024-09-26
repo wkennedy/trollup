@@ -1,13 +1,15 @@
 use crate::commitment::verify_and_commit;
 use base64::{engine::general_purpose, Engine as _};
+use lazy_static::lazy_static;
+use log::info;
 use trollup_zk::prove::ProofPackagePrepared;
 use warp::reply::json;
 use warp::{http::StatusCode, Rejection, Reply};
+use crate::config::Config;
 
-
-// lazy_static! {
-//     static ref CONFIG: Config = Config::build().unwrap();
-// }
+lazy_static! {
+    static ref CONFIG: Config = Config::build().unwrap();
+}
 
 type Result<T> = std::result::Result<T, Rejection>;
 
@@ -31,19 +33,20 @@ pub async fn prove(proof_package_prepared: ProofPackagePrepared, new_state_root:
             let new_state_root_bytes: &[u8; 32] = <&[u8; 32]>::try_from(state_root.as_slice()).unwrap();
             let result = verify_and_commit(proof_package_prepared, new_state_root_bytes.clone()).await;
             match result {
+                // TODO finalize results response
                 Ok(is_valid) => {
-                    println!("result {:?}", &is_valid);
+                    info!("result {:?}", &is_valid);
                     Ok(json(&""))
                 }
                 Err(error) => {
-                    println!("result {:?}", &error);
+                    info!("result {:?}", &error);
                     Ok(json(&""))
                 }
             }
         }
 
         Err(error) => {
-            println!("result {:?}", &error);
+            info!("result {:?}", &error);
             Ok(json(&""))
         }
     }

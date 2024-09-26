@@ -40,9 +40,18 @@ impl<S: StateRecord> ManageState for SledStateManagement<S> {
             .and_then(|ivec| from_slice::<S>(&ivec).ok())
     }
 
-    fn set_state_record(&self, key: &[u8], state: S) {
+    fn set_state_record(&self, state: &S) {
         let serialized = to_vec(&state).expect("Failed to serialize account state");
-        self.db.insert(key, serialized).expect("Failed to insert account state");
+        self.db.insert(state.get_key(), serialized).expect("Failed to insert account state");
+    }
+
+    fn set_state_records(&self, states: &Vec<Self::Record>) {
+        let mut batch = sled::Batch::default();
+        for state in states {
+            let serialized = to_vec(&state).expect("Failed to serialize account state");
+            batch.insert(&state.get_key(), serialized);
+        }
+        self.db.apply_batch(batch).expect("Failed to insert account state");
     }
 
     fn set_latest_block_id(&self, value: &[u8; 32]) {

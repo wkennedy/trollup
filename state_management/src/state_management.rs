@@ -6,7 +6,8 @@ pub trait ManageState {
 
     fn new(path: &str) -> Self;
     fn get_state_record(&self, key: &[u8]) -> Option<Self::Record>;
-    fn set_state_record(&self, key: &[u8], state: Self::Record);
+    fn set_state_record(&self, state: &Self::Record);
+    fn set_state_records(&self, records: &Vec<Self::Record>);
     fn set_latest_block_id(&self, value: &[u8; 32]);
     fn get_latest_block_id(&self) -> Option<[u8; 32]>;
     fn commit(&self);
@@ -60,8 +61,12 @@ impl<T: ManageState> StateManager<T> {
         self.manage_state.set_latest_block_id(key);
     }
 
-    pub fn set_state_record(&self, key: &[u8; 32], state: T::Record) {
-        self.manage_state.set_state_record(key, state)
+    pub fn set_state_record(&self, state: &T::Record) {
+        self.manage_state.set_state_record(state);
+    }
+
+    pub fn set_state_records(&self, states: &Vec<T::Record>) {
+        self.manage_state.set_state_records(states);
     }
 
     pub fn commit(&self) {

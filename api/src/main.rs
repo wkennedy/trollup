@@ -35,15 +35,15 @@ type Result<T> = std::result::Result<T, Rejection>;
 
 #[tokio::main]
 async fn main() {
-    let config = Config::build();//load_config().expect("Error loading config");
+    let config = Config::build(); //load_config().expect("Error loading config");
 
     //Initialize our state managers. Currently only sled is implemented, but the idea is to use be able to use different DBs (RocksDB, etc...), but still utilize the StateManager as the interface
     let account_state_manager = Arc::new(StateManager::<SledStateManagement<AccountState>>::new("This is blank for demo purposes, using default location"));
     let block_state_manager = Arc::new(StateManager::<SledStateManagement<Block>>::new("This is blank for demo purposes, using default location"));
+    let transaction_state_manager = Arc::new(StateManager::<SledStateManagement<TrollupTransaction>>::new("This is blank for demo purposes, using default location"));
 
     // Clone Arc references for the thread
     let thread_account_state_manager = Arc::clone(&account_state_manager);
-    let thread_block_state_manager = Arc::clone(&block_state_manager);
     let transaction_pool = Arc::new(Mutex::new(TransactionPool::new()));
     let commitment_pool = Arc::new(Mutex::new(StateCommitmentPool::new()));
 
@@ -62,7 +62,6 @@ async fn main() {
         });
     });
 
-    let commitment_tx_pool = Arc::clone(&transaction_pool);
     let state_commitment_pool = Arc::clone(&commitment_pool);
     let commitment_handle = thread::spawn(move || {
         // Create a new Tokio runtime
@@ -70,7 +69,7 @@ async fn main() {
 
         // Run the async code on the new runtime
         rt.block_on(async {
-            let mut state_commitment = StateCommitment::new(state_commitment_pool, &block_state_manager);
+            let mut state_commitment = StateCommitment::new(&account_state_manager, state_commitment_pool, &block_state_manager, &transaction_state_manager);
             state_commitment.start().await;
         });
     });
@@ -90,7 +89,7 @@ async fn start_web_server(transaction_pool: Arc<Mutex<TransactionPool>>) {
 
 pub fn routes(
     pool: Arc<Mutex<TransactionPool>>
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract=impl Reply, Error=Rejection> + Clone {
     health_route(Arc::clone(&pool))
         .or(send_transaction_route(Arc::clone(&pool)))
         .or(get_transaction_route(Arc::clone(&pool)))
@@ -98,13 +97,13 @@ pub fn routes(
 
 fn with_pool(
     pool: Arc<Mutex<TransactionPool>>,
-) -> impl Filter<Extract = (Arc<Mutex<TransactionPool>>,), Error = std::convert::Infallible> + Clone {
+) -> impl Filter<Extract=(Arc<Mutex<TransactionPool>>,), Error=std::convert::Infallible> + Clone {
     warp::any().map(move || Arc::clone(&pool))
 }
 
 fn health_route(
     pool: Arc<Mutex<TransactionPool>>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract=impl Reply, Error=Rejection> + Clone {
     warp::path!("health")
         .and(with_pool(pool))
         .and_then(|pool: Arc<Mutex<TransactionPool>>| async move {
@@ -115,10 +114,10 @@ fn health_route(
 
 fn send_transaction_route(
     pool: Arc<Mutex<TransactionPool>>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract=impl Reply, Error=Rejection> + Clone {
     warp::path("send-transaction")
         .and(with_pool(pool))
-        .and(warp::body::json())
+        .and(json())
         .and_then(|pool: Arc<Mutex<TransactionPool>>, transaction: Transaction| async move {
             let handler = Handler::new(pool);
             handler.send_transaction_handler(transaction).await
@@ -127,7 +126,7 @@ fn send_transaction_route(
 
 fn get_transaction_route(
     pool: Arc<Mutex<TransactionPool>>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract=impl Reply, Error=Rejection> + Clone {
     warp::path("get-transaction")
         .and(with_pool(pool))
         .and(warp::path::param())
@@ -162,7 +161,7 @@ fn load_config() -> AnyResult<Config> {
     Ok(sologger_config)
 }
 
-fn with_config(value: Config) -> impl Filter<Extract = (Config,), Error = Infallible> + Clone {
+fn with_config(value: Config) -> impl Filter<Extract=(Config,), Error=Infallible> + Clone {
     warp::any().map(move || value.clone())
 }
 

@@ -25,3 +25,4 @@ thiserror = "1.0.63"
 
 state = {path = "../state"}
 serde = { version = "1.0.209", features = ["derive"] }
+log = "0.4.22"

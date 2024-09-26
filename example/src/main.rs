@@ -1,5 +1,4 @@
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use anyhow::Result;
 use solana_program::hash::Hash;
 use solana_program::instruction::CompiledInstruction;
@@ -57,7 +56,7 @@ async fn main() -> Result<()> {
 
     // Health check
     let health_status = client.health_check().await?;
-    println!("Health status: {}", health_status);
+    info!("Health status: {}", health_status);
 
     let sender = Keypair::new();
 
@@ -78,7 +77,7 @@ async fn main() -> Result<()> {
     let transaction = Transaction {
         signatures: vec![sender.sign_message(&[0u8; 32]).into()], // Placeholder signature
         message: Message {
-            header:MessageHeader {
+            header: MessageHeader {
                 num_required_signatures: 1,
                 num_readonly_signed_accounts: 0,
                 num_readonly_unsigned_accounts: 1,
@@ -95,12 +94,12 @@ async fn main() -> Result<()> {
 
 
     let send_result = client.send_transaction(&transaction).await?;
-    println!("Send transaction result: {}", send_result);
+    info!("Send transaction result: {}", send_result);
 
     // Get transaction details
     let signature = "your_transaction_signature_here";
     let transaction_details = client.get_transaction(signature).await?;
-    println!("Transaction details: {}", transaction_details);
+    info!("Transaction details: {}", transaction_details);
 
     Ok(())
 }

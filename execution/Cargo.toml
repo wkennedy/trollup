@@ -21,6 +21,7 @@ state = {path = "../state"}
 state_commitment = {path = "../state_commitment"}
 state_management = {path = "../state_management" }
 tokio = "1.40.0"
+log = "0.4.22"
 
 [lib]
 doctest = false
