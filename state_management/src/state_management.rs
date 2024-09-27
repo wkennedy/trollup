@@ -5,6 +5,7 @@ pub trait ManageState {
     type Record: StateRecord;
 
     fn new(path: &str) -> Self;
+    fn get_all_entries(&self) -> Vec<([u8;32], Self::Record)>;
     fn get_state_record(&self, key: &[u8]) -> Option<Self::Record>;
     fn set_state_record(&self, state: &Self::Record);
     fn set_state_records(&self, records: &Vec<Self::Record>);
@@ -47,6 +48,9 @@ impl<T: ManageState> StateManager<T> {
         Self {
             manage_state: T::new(path),
         }
+    }
+    pub fn get_all_entries(&self) -> Vec<([u8;32], T::Record)> {
+        self.manage_state.get_all_entries()
     }
 
     pub fn get_state_record(&self, key: &[u8; 32]) -> Option<T::Record> {

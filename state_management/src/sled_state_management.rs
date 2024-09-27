@@ -27,9 +27,30 @@ impl<S: StateRecord> ManageState for SledStateManagement<S> {
     fn new(path: &str) -> Self {
         let config = Config::new().temporary(true);
 
+        // TODO get path from config
         let db = config.open().expect("");
         // let db = sled::open(path).expect("Failed to open database");
         Self { db, _marker: PhantomData }
+    }
+
+    fn get_all_entries(&self) -> Vec<([u8;32], S)> {
+        self.db
+            .iter()
+            .filter_map(|result| {
+                result.ok().and_then(|(key, value)| {
+                    // Try to convert the key to a [u8; 32]
+                    let key_array: Result<[u8; 32], _> = key.as_ref().try_into();
+
+                    // If the key conversion succeeds and we can deserialize the value,
+                    // include this entry in the result
+                    if let (Ok(key_32), Ok(deserialized_value)) = (key_array, S::try_from_slice(&value)) {
+                        Some((key_32, deserialized_value))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect()
     }
 
     fn get_state_record(&self, key: &[u8]) -> Option<S> {

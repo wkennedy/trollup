@@ -87,7 +87,7 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
 
     // Your program ID (replace with your actual program ID)
     // TODO get program ID from config
-    let program_id = Pubkey::from_str("2cQVZYvHb2Lw9jN1GcWEJ3k9rBBkyxnQdMFUbpabVt41").expect("");
+    let program_id = Pubkey::from_str("DBAtuWVrov3Gpi6ji1aVYxyXoiKVyXNe16mJoQRqPYdc").expect("");
 
     // Create and sign the commitment (this would normally be done by the trusted off-chain verifier)
     // TODO create and load this from somewhere else

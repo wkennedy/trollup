@@ -1,3 +1,4 @@
+use std::time::Duration;
 use reqwest::Client;
 use anyhow::Result;
 use log::info;
@@ -49,6 +50,60 @@ impl TrollupClient {
 
         Ok(response.text().await?)
     }
+
+    async fn get_account(&self, account_id: &str) -> Result<String> {
+        let response = self.client
+            .get(format!("{}/get-account/{}", BASE_URL, account_id))
+            .send()
+            .await?;
+
+        Ok(response.text().await?)
+    }
+
+    async fn get_latest_block(&self) -> Result<String> {
+        let response = self.client
+            .get(format!("{}/get-latest-block/", BASE_URL))
+            .send()
+            .await?;
+
+        Ok(response.text().await?)
+    }
+
+    async fn get_block(&self, block_id: u64) -> Result<String> {
+        let response = self.client
+            .get(format!("{}/get-block/{}", BASE_URL, block_id))
+            .send()
+            .await?;
+
+        Ok(response.text().await?)
+    }
+
+    async fn get_all_transactions(&self) -> Result<String> {
+        let response = self.client
+            .get(format!("{}/get-all-transactions/", BASE_URL))
+            .send()
+            .await?;
+
+        Ok(response.text().await?)
+    }
+
+    async fn get_all_accounts(&self) -> Result<String> {
+        let response = self.client
+            .get(format!("{}/get-all-accounts/", BASE_URL))
+            .send()
+            .await?;
+
+        Ok(response.text().await?)
+    }
+
+    async fn get_all_blocks(&self) -> Result<String> {
+        let response = self.client
+            .get(format!("{}/get-all-blocks/", BASE_URL))
+            .send()
+            .await?;
+
+        Ok(response.text().await?)
+    }
 }
 
 #[tokio::main]
@@ -93,14 +148,24 @@ async fn main() -> Result<()> {
         },
     };
 
-
     let send_result = client.send_transaction(&transaction).await?;
-    info!("Send transaction result: {}", send_result);
+    println!("Send transaction result: {}", send_result);
 
     // Get transaction details
     let signature = "your_transaction_signature_here";
     let transaction_details = client.get_transaction(signature).await?;
-    info!("Transaction details: {}", transaction_details);
+    println!("Transaction details: {}", transaction_details);
 
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
+    let account = client.get_all_accounts().await?;
+    println!("Account details: {}", account);
+    
+    let block = client.get_all_blocks().await?;
+    println!("Block details: {}", block);
+    
+    let transactions = client.get_all_transactions().await?;
+    println!("Transactions details: {}", transactions);
+    
     Ok(())
 }

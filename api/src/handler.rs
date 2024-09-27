@@ -21,16 +21,17 @@ impl Handler {
         Handler { transaction_pool }
     }
 
-    pub async fn get_transaction_handler(&self, signature: String) -> Result<impl Reply> {
-        // Implement logic to get transaction from pool or storage
-        // For now, we'll just return a placeholder response
-        Ok(json(&format!("Transaction details for signature: {}", signature)))
-    }
-
     pub async fn send_transaction_handler(&self, transaction: Transaction) -> Result<impl Reply> {
         let mut pool = self.transaction_pool.lock().unwrap();
-        // Convert Solana Transaction to TrollupTransaction (you'll need to implement this conversion)
         let trollup_transaction = convert_to_trollup_transaction(transaction).unwrap();
+        pool.add_transaction(trollup_transaction);
+        Ok(json(&"Transaction submitted successfully"))
+    }
+
+    pub async fn send_transaction_optimistic_handler(&self, transaction: Transaction) -> Result<impl Reply> {
+        let mut pool = self.transaction_pool.lock().unwrap();
+        let mut trollup_transaction = convert_to_trollup_transaction(transaction).unwrap();
+        trollup_transaction.optimistic = true;
         pool.add_transaction(trollup_transaction);
         Ok(json(&"Transaction submitted successfully"))
     }

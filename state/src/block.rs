@@ -1,11 +1,12 @@
 use crate::state_record::StateRecord;
-use borsh::{to_vec, BorshDeserialize, BorshSerialize};
+use borsh::{BorshDeserialize, BorshSerialize};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 // TODO add transaction proof?
-#[derive(Debug, BorshDeserialize, BorshSerialize, Clone, Default)]
+#[derive(Debug, BorshDeserialize, BorshSerialize, Clone, Default, Serialize, Deserialize)]
 pub struct Block {
-    pub id: [u8; 32],
+    id: [u8; 32],
     pub block_number: u64,
     pub transactions_merkle_root: Box<[u8; 32]>,
     pub accounts_merkle_root: Box<[u8; 32]>,
@@ -28,12 +29,15 @@ impl Block {
     }
 
     pub fn get_id(block_number: u64) -> [u8; 32] {
-        Self::hash_id(&["block_", block_number.to_string().as_str()].concat())
+        Self::hash_id(block_number)
     }
 
-    fn hash_id(str_id: &str) -> [u8; 32] {
-        let serialized = to_vec(str_id).unwrap();
-        Sha256::digest(&serialized).into()
+    fn hash_id(block_number: u64) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update("block_");
+        hasher.update(block_number.to_be_bytes());
+        let hash: [u8; 32] = hasher.finalize().into();
+        hash
     }
 }
 

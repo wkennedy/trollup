@@ -105,9 +105,9 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
         let sanitized_txs = batch_sanitize_transactions(&transactions);
 
         // Create a mapping of signatures to transactions
-        let tx_map: HashMap<[u8; 32], &TrollupTransaction> = transactions
+        let tx_map: HashMap<[u8; 32], TrollupTransaction> = transactions
             .iter()
-            .map(|tx| (tx.get_key(), tx))
+            .map(|tx| (tx.get_key(), tx.clone()))
             .collect();
 
         let results = self.execute_svm_transactions(sanitized_txs.clone());
@@ -115,7 +115,7 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
 
         let exec_results = results.execution_results;
 
-        let successful_outcomes = extract_successful_transactions(&tx_map, &loaded_txs, &exec_results);
+        let successful_outcomes = extract_successful_transactions(tx_map, &loaded_txs, &exec_results);
 
         let mut successful_txs: Vec<TrollupTransaction> = Vec::new();
         let mut transaction_ids = Vec::with_capacity(successful_outcomes.len());
@@ -196,7 +196,7 @@ struct ExecutionOutcome {
 }
 
 fn extract_successful_transactions(
-    tx_map: &HashMap<[u8; 32], &TrollupTransaction>,
+    tx_map: HashMap<[u8; 32], TrollupTransaction>,
     loaded_txs: &[TransactionLoadResult],
     exec_results: &[TransactionExecutionResult],
 ) -> Vec<ExecutionOutcome> {
@@ -207,7 +207,7 @@ fn extract_successful_transactions(
         match x1 {
             TransactionExecutionResult::Executed { .. } => {
                 execution_outcomes.push(ExecutionOutcome {
-                    trollup_transaction: value.clone().clone(),
+                    trollup_transaction: value.clone(),
                     accounts: extract_accounts(&loaded_tx.clone()),
                 });
             }

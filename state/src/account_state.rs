@@ -1,11 +1,12 @@
 use crate::state_record::StateRecord;
 use borsh::{BorshDeserialize, BorshSerialize};
+use serde::{Deserialize, Serialize};
 use solana_sdk::account::{Account, AccountSharedData};
 use solana_sdk::clock::Epoch;
 use solana_sdk::pubkey::Pubkey;
 
 /// Represents the state of an account.
-#[derive(Debug, BorshDeserialize, BorshSerialize, Clone)]
+#[derive(Debug, BorshDeserialize, BorshSerialize, Clone, Serialize, Deserialize)]
 pub struct AccountState {
     pub address: Pubkey,
     /// lamports in the account

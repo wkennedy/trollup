@@ -125,16 +125,29 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: M
 
                         self.account_state_management.set_state_records(&account_states);
                         self.transaction_state_management.set_state_records(&commitment_package.transactions);
+                        self.account_state_management.commit();
+                        self.transaction_state_management.commit();
 
-                        let latest_block_id = self.block_state_management.get_latest_block_id().unwrap_or(Block::get_id(0));
-                        let latest_block = self.block_state_management.get_state_record(&latest_block_id).unwrap_or(Block::default());
-                        let next_block_number = latest_block.block_number + 1;
+                        let mut compressed_proof = Vec::new();
+                        proof_package.proof.serialize_uncompressed(&mut compressed_proof)
+                            .expect("Failed to serialize proof");
+                        
+                        let next_block_number = self.block_state_management
+                            .get_latest_block_id()
+                            .and_then(|id| self.block_state_management.get_state_record(&id))
+                            .map(|block| block.block_number + 1)
+                            .unwrap_or(1);
 
-                        let compressed_proof = Vec::new();
-                        proof_package.proof.serialize_uncompressed(compressed_proof.clone()).expect("");
+                        let block = Block::new(
+                            next_block_number,
+                            Box::new(self.transaction_tree.root().expect("Transaction tree root should exist")),
+                            Box::new(account_state_root),
+                            compressed_proof,
+                            commitment_package.transaction_ids,
+                            account_addresses
+                        );
 
-                        let block = Block::new(next_block_number, Box::from(self.transaction_tree.root().unwrap()), Box::from(account_state_root), compressed_proof, commitment_package.transaction_ids, account_addresses);
-                        info!("Saving latest block: {:?}", &block.get_key());
+                        info!("Saving new block: {:?}", block.get_key());
                         self.block_state_management.set_latest_block_id(&block.get_key());
                         self.block_state_management.set_state_record(&block);
                         self.block_state_management.commit();

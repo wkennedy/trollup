@@ -2,6 +2,7 @@ use crate::commitment::verify_and_commit;
 use base64::{engine::general_purpose, Engine as _};
 use lazy_static::lazy_static;
 use log::info;
+use serde_derive::{Deserialize, Serialize};
 use trollup_zk::prove::ProofPackagePrepared;
 use warp::reply::json;
 use warp::{http::StatusCode, Rejection, Reply};
@@ -12,6 +13,12 @@ lazy_static! {
 }
 
 type Result<T> = std::result::Result<T, Rejection>;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ApiResponse {
+    //TODO update this for the actual response from the validator
+    pub message: String,
+}
 
 #[utoipa::path(
     post,
@@ -36,18 +43,18 @@ pub async fn prove(proof_package_prepared: ProofPackagePrepared, new_state_root:
                 // TODO finalize results response
                 Ok(is_valid) => {
                     info!("result {:?}", &is_valid);
-                    Ok(json(&""))
+                    Ok(json(&ApiResponse{ message: "success".to_string() }))
                 }
                 Err(error) => {
                     info!("result {:?}", &error);
-                    Ok(json(&""))
+                    Ok(json(&ApiResponse{ message: "fail".to_string() }))
                 }
             }
         }
 
         Err(error) => {
             info!("result {:?}", &error);
-            Ok(json(&""))
+            Ok(json(&ApiResponse{ message: "fail".to_string() }))
         }
     }
 
