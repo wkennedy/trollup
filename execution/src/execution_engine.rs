@@ -18,8 +18,9 @@ use state_commitment::state_commitment_pool::{StateCommitmentPool, StatePool};
 use state_management::account_loader::TrollupAccountLoader;
 use state_management::state_management::{ManageState, StateManager};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use solana_program_runtime::log_collector::log::info;
+use tokio::sync::Mutex;
 use state_commitment::state_commitment_layer::StateCommitmentPackage;
 
 #[derive(PartialEq, Eq, Debug)]
@@ -95,7 +96,7 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
 
     /// Executes a block by processing a set of transactions.
     pub async fn execute_block(&mut self) {
-        let mut tx_pool = self.transaction_pool.lock().unwrap();
+        let mut tx_pool = self.transaction_pool.lock().await;
         let transactions = tx_pool.get_next_transactions(4);
         drop(tx_pool);
         if transactions.is_empty() {
@@ -118,22 +119,43 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
         let successful_outcomes = extract_successful_transactions(tx_map, &loaded_txs, &exec_results);
 
         let mut successful_txs: Vec<TrollupTransaction> = Vec::new();
+        let mut successful_optimistic_txs: Vec<TrollupTransaction> = Vec::new();
         let mut transaction_ids = Vec::with_capacity(successful_outcomes.len());
         let mut account_states: Vec<AccountState> = Vec::new();
         for outcome in successful_outcomes {
             transaction_ids.push(outcome.trollup_transaction.get_key());
             account_states.extend(outcome.accounts);
-            successful_txs.push(outcome.trollup_transaction);
+            if outcome.trollup_transaction.optimistic {
+                successful_optimistic_txs.push(outcome.trollup_transaction)
+            } else {
+                successful_txs.push(outcome.trollup_transaction);
+            }
         }
 
-        let commitment_package = StateCommitmentPackage {
-            state_records: account_states,
-            transactions: successful_txs,
-            transaction_ids,
-        };
+        if !successful_txs.is_empty() {
+            let commitment_package = StateCommitmentPackage {
+                optimistic: false,
+                state_records: account_states.clone(),
+                transactions: successful_txs,
+                transaction_ids: transaction_ids.clone(),
+            };
 
-        let mut commit_pool = self.commitment_pool.lock().unwrap();
-        commit_pool.add(commitment_package);
+            let mut commit_pool = self.commitment_pool.lock().await;
+            commit_pool.add(commitment_package);
+        }
+
+        if !successful_optimistic_txs.is_empty() {
+            let commitment_package = StateCommitmentPackage {
+                optimistic: true,
+                state_records: account_states,
+                transactions: successful_optimistic_txs,
+                transaction_ids,
+            };
+
+            let mut commit_pool = self.commitment_pool.lock().await;
+            commit_pool.add(commitment_package);
+        }
+
     }
 
 

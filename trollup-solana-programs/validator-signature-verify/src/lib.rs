@@ -3,6 +3,8 @@ use solana_program::program_error::ProgramError;
 use solana_program::secp256k1_recover::{secp256k1_recover, Secp256k1Pubkey};
 use solana_program::{account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, keccak, msg, pubkey::Pubkey};
 
+// TODO combine sig verify and proof verify into single program
+
 // Off-chain generated proof and verification result
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ZkProofCommitment {

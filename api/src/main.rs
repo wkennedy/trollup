@@ -14,10 +14,11 @@ use std::convert::Infallible;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use std::time::Duration;
 use std::{env, thread};
 use tokio::runtime::Runtime;
+use tokio::sync::Mutex;
 use trollup_api::account_handler::AccountHandler;
 use trollup_api::block_handler::BlockHandler;
 use trollup_api::config::{Config, ConfigError};
@@ -99,6 +100,7 @@ pub fn routes(
 ) -> impl Filter<Extract=impl Reply, Error=Rejection> + Clone {
     health_route(Arc::clone(&pool))
         .or(send_transaction_route(Arc::clone(&pool)))
+        .or(send_transaction_optimistic_route(Arc::clone(&pool)))
         .or(get_transaction_route(Arc::clone(&transaction_state_manager)))
         .or(get_all_transaction_route(Arc::clone(&transaction_state_manager)))
         .or(get_account_route(Arc::clone(&account_state_manager)))
@@ -134,6 +136,18 @@ fn send_transaction_route(
         .and_then(|pool: Arc<Mutex<TransactionPool>>, transaction: Transaction| async move {
             let handler = Handler::new(pool);
             handler.send_transaction_handler(transaction).await
+        })
+}
+
+fn send_transaction_optimistic_route(
+    pool: Arc<Mutex<TransactionPool>>,
+) -> impl Filter<Extract=impl Reply, Error=Rejection> + Clone {
+    warp::path("send-transaction-optimistic")
+        .and(with_pool(pool))
+        .and(json())
+        .and_then(|pool: Arc<Mutex<TransactionPool>>, transaction: Transaction| async move {
+            let handler = Handler::new(pool);
+            handler.send_transaction_optimistic_handler(transaction).await
         })
 }
 

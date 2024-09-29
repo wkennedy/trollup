@@ -116,3 +116,38 @@ The library makes extensive use of Rust's async/await syntax, particularly in th
 ## Conclusion
 
 The Trollup State Commitment Library provides a robust framework for managing state changes in the Trollup network extension. It combines efficient data structures (Merkle trees) with zero-knowledge proofs to ensure the integrity and privacy of state transitions, while providing a flexible interface for integration with other components of the blockchain system.
+
+TODO
+```mermaid
+graph TD
+    subgraph "Block N-1"
+    A[Block Header N-1]
+    B[Merkle Root N-1]
+    C[Transactions N-1]
+    A --> B
+    B --> C
+    end
+
+    subgraph "Block N"
+    D[Block Header N]
+    E[Merkle Root N]
+    F[Transactions N]
+    D --> E
+    E --> F
+    end
+
+    subgraph "Block N+1"
+    G[Block Header N+1]
+    H[Merkle Root N+1]
+    I[Transactions N+1]
+    G --> H
+    H --> I
+    end
+
+    J[Cumulative State] --> A
+    J --> D
+    J --> G
+
+    A --> D
+    D --> G
+```

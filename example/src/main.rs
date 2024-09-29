@@ -42,6 +42,16 @@ impl TrollupClient {
         Ok(response.text().await?)
     }
 
+    async fn send_transaction_optimistic(&self, transaction: &Transaction) -> Result<String> {
+        let response = self.client
+            .post(format!("{}/send-transaction-optimistic", BASE_URL))
+            .json(transaction)
+            .send()
+            .await?;
+
+        Ok(response.text().await?)
+    }
+
     async fn get_transaction(&self, signature: &str) -> Result<String> {
         let response = self.client
             .get(format!("{}/get-transaction/{}", BASE_URL, signature))
@@ -148,7 +158,7 @@ async fn main() -> Result<()> {
         },
     };
 
-    let send_result = client.send_transaction(&transaction).await?;
+    let send_result = client.send_transaction_optimistic(&transaction).await?;
     println!("Send transaction result: {}", send_result);
 
     // Get transaction details

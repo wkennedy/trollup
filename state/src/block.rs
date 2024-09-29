@@ -7,6 +7,8 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, BorshDeserialize, BorshSerialize, Clone, Default, Serialize, Deserialize)]
 pub struct Block {
     id: [u8; 32],
+    block_hash: [u8; 32],
+    pub previous_block: [u8; 32],
     pub block_number: u64,
     pub transactions_merkle_root: Box<[u8; 32]>,
     pub accounts_merkle_root: Box<[u8; 32]>,
@@ -16,9 +18,11 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(block_number: u64, transactions_merkle_root: Box<[u8; 32]>, accounts_merkle_root: Box<[u8; 32]>, accounts_zk_proof: Vec<u8>, transactions: Vec<[u8;32]>, accounts: Vec<[u8; 32]>) -> Self {
+    pub fn new(block_number: u64, previous_block: [u8; 32], transactions_merkle_root: Box<[u8; 32]>, accounts_merkle_root: Box<[u8; 32]>, accounts_zk_proof: Vec<u8>, transactions: Vec<[u8;32]>, accounts: Vec<[u8; 32]>) -> Self {
         Block {
             id: Self::get_id(block_number),
+            block_hash: Self::block_hash(&transactions_merkle_root, &accounts_merkle_root),
+            previous_block,
             block_number,
             transactions_merkle_root,
             accounts_merkle_root,
@@ -36,6 +40,14 @@ impl Block {
         let mut hasher = Sha256::new();
         hasher.update("block_");
         hasher.update(block_number.to_be_bytes());
+        let hash: [u8; 32] = hasher.finalize().into();
+        hash
+    }
+    
+    fn block_hash(transactions_root: &[u8; 32], accounts_root: &[u8; 32]) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(transactions_root);
+        hasher.update(accounts_root);
         let hash: [u8; 32] = hasher.finalize().into();
         hash
     }
