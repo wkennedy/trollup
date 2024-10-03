@@ -75,6 +75,10 @@ impl<S: StateRecord> ManageState for SledStateManagement<S> {
         self.db.apply_batch(batch).expect("Failed to insert account state");
     }
 
+    fn delete_state_record(&self, key: &[u8]) -> bool {
+        self.db.remove(key).is_ok()
+    }
+
     fn set_latest_block_id(&self, value: &[u8; 32]) {
         self.db.insert("LATEST_BLOCK", value).expect("Failed to insert LATEST_BLOCK key");
     }

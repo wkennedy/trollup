@@ -16,6 +16,7 @@ ark-ff = "0.4.2"
 ark-bn254 = "0.4.0"
 ark-groth16 = "0.4.0"
 ark-serialize = "0.4.2"
+thiserror = "1.0.64"
 
 [lib]
 crate-type = ["cdylib", "lib"]

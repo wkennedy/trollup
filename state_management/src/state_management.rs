@@ -9,6 +9,7 @@ pub trait ManageState {
     fn get_state_record(&self, key: &[u8]) -> Option<Self::Record>;
     fn set_state_record(&self, state: &Self::Record);
     fn set_state_records(&self, records: &Vec<Self::Record>);
+    fn delete_state_record(&self, key: &[u8]) -> bool;
     fn set_latest_block_id(&self, value: &[u8; 32]);
     fn get_latest_block_id(&self) -> Option<[u8; 32]>;
     fn commit(&self);
@@ -71,6 +72,10 @@ impl<T: ManageState> StateManager<T> {
 
     pub fn set_state_records(&self, states: &Vec<T::Record>) {
         self.manage_state.set_state_records(states);
+    }
+
+    pub fn delete_state_record(&self, key: &[u8]) -> bool {
+        self.manage_state.delete_state_record(key)
     }
 
     pub fn commit(&self) {
