@@ -6,7 +6,7 @@ use solana_sdk::transaction::Transaction;
 use state::account_state::AccountState;
 use state::block::Block;
 use state::transaction::{message_header_to_bytes, TrollupCompileInstruction, TrollupMessage, TrollupTransaction};
-use state_commitment::state_commitment_layer::{PendingStateCommitmentPackage, StateCommitment, StateCommitter};
+use state_commitment::state_commitment_layer::{StateCommitment, StateCommitmentPackage, StateCommitter};
 use state_commitment::state_commitment_pool::{StateCommitmentPool, StatePool};
 use state_management::sled_state_management::SledStateManagement;
 use state_management::state_management::StateManager;
@@ -46,7 +46,7 @@ async fn main() {
     let account_state_manager = Arc::new(StateManager::<SledStateManagement<AccountState>>::new("This is blank for demo purposes, using default location"));
     let block_state_manager = Arc::new(StateManager::<SledStateManagement<Block>>::new("This is blank for demo purposes, using default location"));
     let transaction_state_manager = Arc::new(StateManager::<SledStateManagement<TrollupTransaction>>::new("This is blank for demo purposes, using default location"));
-    let optimistic_commitment_state_management = Arc::new(StateManager::<SledStateManagement<PendingStateCommitmentPackage<AccountState>>>::new("This is blank for demo purposes, using default location"));
+    let optimistic_commitment_state_management = Arc::new(StateManager::<SledStateManagement<StateCommitmentPackage<AccountState>>>::new("This is blank for demo purposes, using default location"));
     // Clone Arc references for the thread
     let thread_account_state_manager = Arc::clone(&account_state_manager);
     let transaction_pool = Arc::new(Mutex::new(TransactionPool::new()));

@@ -1,3 +1,4 @@
+use crate::state_commitment_layer::CommitmentResultType::{OnChain, TimeOut};
 use crate::state_commitment_pool::{StateCommitmentPool, StatePool};
 use crate::validator_client::ValidatorClient;
 use ark_serialize::CanonicalSerialize;
@@ -32,6 +33,24 @@ use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use trollup_zk::prove::{generate_proof_load_keys, setup, ProofPackage};
 use url::Url;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum CommitmentResultType {
+    OnChain,
+    TimeOut,
+}
+
+#[derive(Clone, Debug)]
+struct CommitmentProcessorMessage {
+    state_root: [u8; 32],
+    processor_type: CommitmentResultType,
+}
+
+#[derive(Clone, Debug)]
+struct CommitmentEntry<S: StateRecord + Clone> {
+    package: StateCommitmentPackage<S>,
+    timestamp: Instant,
+}
+
 #[derive(PartialEq, Eq, Debug)]
 enum CommitterState {
     Running,
@@ -40,32 +59,39 @@ enum CommitterState {
 }
 
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
-pub struct PendingStateCommitmentPackage<S: StateRecord> {
+pub struct StateCommitmentPackage<S: StateRecord> {
     pub optimistic: bool,
-    pub state_root: [u8; 32],
+    pub state_root: Option<[u8; 32]>,
     pub state_records: Vec<S>,
     pub transactions: Vec<TrollupTransaction>,
     pub transaction_ids: Vec<[u8; 32]>,
 }
 
-impl<S: StateRecord> StateRecord for PendingStateCommitmentPackage<S> {
+impl<S: StateRecord> StateRecord for StateCommitmentPackage<S> {
     fn get_key(&self) -> [u8; 32] {
         self.state_root
+            .expect("No state_root set for this record. The state_root is the key for this record.")
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct StateCommitmentPackage<S: StateRecord> {
-    pub optimistic: bool,
-    pub state_records: Vec<S>,
-    pub transactions: Vec<TrollupTransaction>,
-    pub transaction_ids: Vec<[u8; 32]>,
-}
+// #[derive(Clone, Debug)]
+// pub struct StateCommitmentPackage<S: StateRecord> {
+//     pub optimistic: bool,
+//     pub state_records: Vec<S>,
+//     pub transactions: Vec<TrollupTransaction>,
+//     pub transaction_ids: Vec<[u8; 32]>,
+// }
 
 impl<S: StateRecord> StateCommitmentPackage<S> {
-    pub fn new(optimistic: bool, state_records: Vec<S>, transactions: Vec<TrollupTransaction>, transaction_ids: Vec<[u8; 32]>) -> Self {
+    pub fn new(
+        optimistic: bool,
+        state_records: Vec<S>,
+        transactions: Vec<TrollupTransaction>,
+        transaction_ids: Vec<[u8; 32]>,
+    ) -> Self {
         StateCommitmentPackage {
             optimistic,
+            state_root: None,
             state_records,
             transactions,
             transaction_ids,
@@ -84,9 +110,9 @@ impl<S: StateRecord> StateCommitmentPackage<S> {
 }
 
 pub trait StateCommitter<T: StateRecord> {
-    fn start_listeners(&self) -> impl Future<Output=()>;
-    fn start(&mut self) -> impl Future<Output=()>;
-    fn stop(&mut self) -> impl Future<Output=()>;
+    fn start_listeners(&self) -> impl Future<Output = ()>;
+    fn start(&mut self) -> impl Future<Output = ()>;
+    fn stop(&mut self) -> impl Future<Output = ()>;
 }
 
 pub struct TreeComposite {
@@ -147,8 +173,13 @@ impl TreeComposite {
     }
 }
 
-
-pub struct StateCommitment<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: ManageState<Record=TrollupTransaction>, O: ManageState<Record=PendingStateCommitmentPackage<AccountState>>> {
+pub struct StateCommitment<
+    'a,
+    A: ManageState<Record = AccountState>,
+    B: ManageState<Record = Block>,
+    T: ManageState<Record = TrollupTransaction>,
+    O: ManageState<Record = StateCommitmentPackage<AccountState>>,
+> {
     commitment_pool: Arc<Mutex<StateCommitmentPool<AccountState>>>,
     committer_state: CommitterState,
     account_state_management: &'a StateManager<A>,
@@ -158,12 +189,21 @@ pub struct StateCommitment<'a, A: ManageState<Record=AccountState>, B: ManageSta
     commitments: Arc<RwLock<HashMap<[u8; 32], CommitmentEntry<AccountState>>>>,
 }
 
-impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: ManageState<Record=TrollupTransaction>, O: ManageState<Record=PendingStateCommitmentPackage<AccountState>>> StateCommitment<'a, A, B, T, O> {
-    pub fn new(account_state_management: &'a StateManager<A>,
-               commitment_pool: Arc<Mutex<StateCommitmentPool<AccountState>>>,
-               block_state_management: &'a StateManager<B>,
-               transaction_state_management: &'a StateManager<T>,
-               optimistic_commitment_state_management: Arc<StateManager<O>>) -> Self {
+impl<
+        'a,
+        A: ManageState<Record = AccountState>,
+        B: ManageState<Record = Block>,
+        T: ManageState<Record = TrollupTransaction>,
+        O: ManageState<Record = StateCommitmentPackage<AccountState>>,
+    > StateCommitment<'a, A, B, T, O>
+{
+    pub fn new(
+        account_state_management: &'a StateManager<A>,
+        commitment_pool: Arc<Mutex<StateCommitmentPool<AccountState>>>,
+        block_state_management: &'a StateManager<B>,
+        transaction_state_management: &'a StateManager<T>,
+        optimistic_commitment_state_management: Arc<StateManager<O>>,
+    ) -> Self {
         StateCommitment {
             commitment_pool,
             committer_state: CommitterState::Initialized,
@@ -181,7 +221,7 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: M
         drop(commitment_pool);
 
         match account_state_commitment_package {
-            None => { return }
+            None => return,
             Some(commitment_package) => {
                 // Create proof, send proof to validator, once validator commits to a verify, then commit account and block changes to db
 
@@ -191,17 +231,20 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: M
                 let account_states = &commitment_package.state_records;
 
                 tree_composite.add_states(account_states);
-                let (_proof_package_lite, proof_package_prepared, proof_package) = generate_proof_load_keys(&account_states);
+                let (_proof_package_lite, proof_package_prepared, proof_package) =
+                    generate_proof_load_keys(&account_states);
 
-                let account_state_root = tree_composite.get_uncommitted_root().expect("Error getting account state root");
+                let account_state_root = tree_composite
+                    .get_uncommitted_root()
+                    .expect("Error getting account state root");
 
                 // TODO send optimistic transactions to thread listening for PDA updates for proof verification
                 if commitment_package.optimistic {
                     // self.handle_optimistic_transactions(optimistic_txs, account_states.clone(), account_state_root);
                     info!("Adding optimistic commitment to opti-q");
-                    let pending_state_commitment_package = PendingStateCommitmentPackage {
+                    let pending_state_commitment_package = StateCommitmentPackage {
                         optimistic: true,
-                        state_root: account_state_root,
+                        state_root: Some(account_state_root),
                         state_records: commitment_package.state_records,
                         transactions: commitment_package.transactions,
                         transaction_ids: commitment_package.transaction_ids,
@@ -242,25 +285,39 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: M
         }
     }
 
-    async fn verify_with_validator(&self, commitment_package: StateCommitmentPackage<AccountState>) {
+    async fn verify_with_validator(
+        &self,
+        commitment_package: StateCommitmentPackage<AccountState>,
+    ) {
         let mut tree_composite = TreeComposite::new();
         tree_composite.add_transactions(&commitment_package.transactions);
 
         let account_states = &commitment_package.state_records;
 
         tree_composite.add_states(account_states);
-        let (_proof_package_lite, proof_package_prepared, proof_package) = generate_proof_load_keys(&account_states);
+        let (_proof_package_lite, proof_package_prepared, proof_package) =
+            generate_proof_load_keys(&account_states);
 
-        let account_state_root = tree_composite.get_uncommitted_root().expect("Error getting account state root");
+        let account_state_root = tree_composite
+            .get_uncommitted_root()
+            .expect("Error getting account state root");
 
         // TODO get from config
         let validator_client = ValidatorClient::new("http://localhost:27183");
-        let validator_result = validator_client.prove(proof_package_prepared, &account_state_root).await;
+        let validator_result = validator_client
+            .prove(proof_package_prepared, &account_state_root)
+            .await;
         match validator_result {
             Ok(response) => {
                 info!("Successful response from validator: {:?}", response);
                 //TODO get info from validator response
-                self.finalize(&mut tree_composite, commitment_package, proof_package, account_state_root).await;
+                self.finalize(
+                    &mut tree_composite,
+                    commitment_package,
+                    proof_package,
+                    account_state_root,
+                )
+                .await;
             }
             Err(response) => {
                 info!("Unsuccessful response from validator: {:?}", response);
@@ -272,7 +329,13 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: M
         }
     }
 
-    async fn finalize(&self, tree_composite: &mut TreeComposite, account_state_commitment_package: StateCommitmentPackage<AccountState>, proof_package: ProofPackage, account_state_root: [u8; 32]) {
+    async fn finalize(
+        &self,
+        tree_composite: &mut TreeComposite,
+        account_state_commitment_package: StateCommitmentPackage<AccountState>,
+        proof_package: ProofPackage,
+        account_state_root: [u8; 32],
+    ) {
         tree_composite.transaction_tree.commit();
         tree_composite.state_tree.commit();
 
@@ -285,15 +348,20 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: M
             })
             .collect();
 
-        self.account_state_management.set_state_records(&account_states);
-        self.transaction_state_management.set_state_records(&account_state_commitment_package.transactions);
+        self.account_state_management
+            .set_state_records(&account_states);
+        self.transaction_state_management
+            .set_state_records(&account_state_commitment_package.transactions);
         self.account_state_management.commit();
         self.transaction_state_management.commit();
         let mut compressed_proof = Vec::new();
-        proof_package.proof.serialize_uncompressed(&mut compressed_proof)
+        proof_package
+            .proof
+            .serialize_uncompressed(&mut compressed_proof)
             .expect("Failed to serialize proof");
 
-        let next_block_number = self.block_state_management
+        let next_block_number = self
+            .block_state_management
             .get_latest_block_id()
             .and_then(|id| self.block_state_management.get_state_record(&id))
             .map(|block| block.block_number + 1)
@@ -303,7 +371,12 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: M
         let block = Block::new(
             next_block_number,
             Block::get_id(next_block_number - 1),
-            Box::new(tree_composite.transaction_tree.root().expect("Transaction tree root should exist")),
+            Box::new(
+                tree_composite
+                    .transaction_tree
+                    .root()
+                    .expect("Transaction tree root should exist"),
+            ),
             Box::new(account_state_root),
             compressed_proof,
             tx_ids,
@@ -311,17 +384,17 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: M
         );
 
         info!("Saving new block: {:?}", block.get_key());
-        self.block_state_management.set_latest_block_id(&block.get_key());
+        self.block_state_management
+            .set_latest_block_id(&block.get_key());
         self.block_state_management.set_state_record(&block);
         self.block_state_management.commit();
     }
 
-    async fn start_pda_listener(
-        &self, sender: Sender<Value>,
-    ) {
+    async fn start_pda_listener(&self, sender: Sender<Value>) {
         // let (tx, mut rx) = mpsc::channel(100);
         //TODO get from config
-        let program_pubkey = Pubkey::from_str("DBAtuWVrov3Gpi6ji1aVYxyXoiKVyXNe16mJoQRqPYdc").expect("Invalid program ID");
+        let program_pubkey = Pubkey::from_str("DBAtuWVrov3Gpi6ji1aVYxyXoiKVyXNe16mJoQRqPYdc")
+            .expect("Invalid program ID");
         let sender = sender.clone();
 
         // Start the PDA listener in a new thread
@@ -333,23 +406,32 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: M
         });
     }
 
-    async fn add_commitment(&self, package: PendingStateCommitmentPackage<AccountState>) {
+    async fn add_commitment(&self, package: StateCommitmentPackage<AccountState>) {
         info!("Added pending commit: {:?}", &package);
         let mut commitments = self.commitments.write().await;
-        self.optimistic_commitment_state_management.set_state_record(&package);
-        commitments.insert(package.state_root, CommitmentEntry {
-            package,
-            timestamp: Instant::now(),
-        });
+        self.optimistic_commitment_state_management
+            .set_state_record(&package);
+        commitments.insert(
+            package.state_root.unwrap(),
+            CommitmentEntry {
+                package,
+                timestamp: Instant::now(),
+            },
+        );
     }
 
     async fn remove_commitment(&self, id: &[u8; 32]) {
         let mut commitments = self.commitments.write().await;
-        self.optimistic_commitment_state_management.delete_state_record(id);
+        self.optimistic_commitment_state_management
+            .delete_state_record(id);
         commitments.remove(id);
     }
 
-    pub async fn start_optimistic_commitment_processor(&self, mut pda_receiver: mpsc::Receiver<Value>, optimistic_processor_sender: Sender<Value>) {
+    pub async fn start_optimistic_commitment_processor(
+        &self,
+        mut pda_receiver: mpsc::Receiver<Value>,
+        optimistic_processor_sender: Sender<CommitmentProcessorMessage>,
+    ) {
         info!("Starting start_optimistic_commitment_processor");
 
         let commitments = Arc::clone(&self.commitments);
@@ -363,10 +445,13 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: M
                         //     self.remove_commitment(&id).await;
                         // }
                         //
-             
+
                             // self.verify_with_validator(s);
                         info!("Value received from PDA: {:?}", value);
-                        optimistic_processor_sender.send(json!({"type": "on_chain"})).await.expect("TODO: panic message");
+                        let read_guard = commitments.read().await;
+                        //TODO get key from pda account details
+                        let entry = read_guard.get(&Pubkey::new_unique().to_bytes()).expect("");
+                        optimistic_processor_sender.send(CommitmentProcessorMessage {processor_type: OnChain, state_root: entry.package.state_root.unwrap()}).await.expect("TODO: panic message");
 
                     }
                     _ = tokio::time::sleep(Duration::from_secs(10)) => {
@@ -374,7 +459,7 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: M
 
                         // let mut commitments = commitments.write().await;
                         let read_guard = commitments.read().await;
-    
+
                         for (key, entry) in read_guard.iter() {
                             info!("{:?}", entry);
                             if entry.timestamp.elapsed() < Duration::from_secs(10) {
@@ -382,7 +467,7 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: M
                                     info!("  Key: {:?}", key);
                                     info!("  Timestamp: {:?}", entry.timestamp);
                                     info!("  Value: {:?}", entry.package);
-                                optimistic_processor_sender.send(json!({"type": "time_out"})).await.expect("TODO: panic message");
+                                optimistic_processor_sender.send(CommitmentProcessorMessage {processor_type: TimeOut, state_root: entry.package.state_root.unwrap()}).await.expect("TODO: panic message");
                             }
                         }
                         drop(read_guard);
@@ -397,19 +482,28 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: M
     // }
 }
 
-impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: ManageState<Record=TrollupTransaction>, O: ManageState<Record=PendingStateCommitmentPackage<AccountState>> + Send + Sync + 'static> StateCommitter<AccountState> for StateCommitment<'a, A, B, T, O> {
+impl<
+        'a,
+        A: ManageState<Record = AccountState>,
+        B: ManageState<Record = Block>,
+        T: ManageState<Record = TrollupTransaction>,
+        O: ManageState<Record = StateCommitmentPackage<AccountState>> + Send + Sync + 'static,
+    > StateCommitter<AccountState> for StateCommitment<'a, A, B, T, O>
+{
     async fn start_listeners(&self) {
         // self.optimistic_commitment_manager;
-
     }
+    
     async fn start(&mut self) {
         // let (manager, receiver) = OptimisticCommitmentManager::<AccountState, O>::new(Arc::clone(&self.optimistic_commitment_state_management));
         // let manager = Arc::new(manager);
         // let manager_clone = Arc::clone(&manager);
         let (pda_sender, pda_receiver) = mpsc::channel(100);
-        let (optimistic_processor_sender, mut optimistic_processor_receiver) = mpsc::channel::<Value>(100);
+        let (optimistic_processor_sender, mut optimistic_processor_receiver) =
+            mpsc::channel::<CommitmentProcessorMessage>(100);
 
-        self.start_optimistic_commitment_processor(pda_receiver, optimistic_processor_sender).await;
+        self.start_optimistic_commitment_processor(pda_receiver, optimistic_processor_sender)
+            .await;
         // self.optimistic_commitment_manager = manager_clone;
         // self.receiver = Some(receiver);
 
@@ -417,30 +511,41 @@ impl<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: M
         setup(true);
         info!("StateCommitter started.");
         self.start_pda_listener(pda_sender).await;
+        let commitments = Arc::clone(&self.commitments);
         loop {
             if self.committer_state == CommitterState::Stopped {
                 info!("StateCommitter stopped.");
                 break;
             } else {
                 tokio::select! {
-                    
+
                     result = optimistic_processor_receiver.recv() => {
-                    match result {
-                        Some(msg) => {
-                            info!("Received from optimistic processor: {}", msg);
-                            // Process the message
-                            // self.block_state_management.commit()
-                        }
-                        None => {
-                            // info!("Optimistic processor channel closed");
-                            // Handle the channel being closed if necessary
-                            // break;
+                        match result {
+                            Some(commitment_processor_message) => {
+                                info!("Received from optimistic processor: {:?}", commitment_processor_message);
+                                    match commitment_processor_message.processor_type {
+    
+                                        OnChain => {}
+                                        TimeOut => {
+                                            let read_guard = commitments.read().await;
+                                            //TODO get key from pda account details
+                                            let entry = read_guard.get(&commitment_processor_message.state_root).expect("");
+                                            self.verify_with_validator(entry.package.clone()).await;
+                                        }
+                                    }
+    
+                            }
+                            None => {
+                                // info!("Optimistic processor channel closed");
+                                // Handle the channel being closed if necessary
+                                // break;
+                            }
                         }
                     }
-                }
-                _ = self.read_from_pool() => {
-                    // read_from_pool completed, you can add any post-processing here if needed
-                }
+                    
+                    _ = self.read_from_pool() => {
+                        // read_from_pool completed, you can add any post-processing here if needed
+                    }
                 }
             }
         }
@@ -458,9 +563,7 @@ pub struct PdaListener {
 
 impl PdaListener {
     pub fn new(program_pubkey: Pubkey) -> Self {
-        PdaListener {
-            program_pubkey,
-        }
+        PdaListener { program_pubkey }
     }
 
     pub async fn start(&mut self, tx: Sender<Value>) -> Result<(), Box<dyn std::error::Error>> {
@@ -484,7 +587,9 @@ impl PdaListener {
         });
 
         // Send the subscription request
-        write.send(Message::Text(subscribe_request.to_string())).await?;
+        write
+            .send(Message::Text(subscribe_request.to_string()))
+            .await?;
 
         // Handle incoming messages
         while let Some(message) = read.next().await {
@@ -522,76 +627,3 @@ impl PdaListener {
         Ok(())
     }
 }
-
-
-#[derive(Clone, Debug)]
-struct CommitmentEntry<S: StateRecord + Clone> {
-    package: PendingStateCommitmentPackage<S>,
-    timestamp: Instant,
-}
-// 
-// struct OptimisticCommitmentManager<S: StateRecord + Send + Sync + Clone + Debug + 'static, O: Send + Sync + 'static + ManageState<Record=PendingStateCommitmentPackage<S>>> {
-//     commitments: Arc<RwLock<HashMap<[u8; 32], CommitmentEntry<S>>>>,
-//     sender: mpsc::Sender<([u8; 32], bool)>,
-//     optimistic_commitment_state_management: Arc<StateManager<O>>
-// }
-// 
-// impl<S: StateRecord + Send + Sync + Clone + Debug + 'static, O: Send + Sync + ManageState<Record=PendingStateCommitmentPackage<S>>> OptimisticCommitmentManager<S, O> {
-//     fn new(optimistic_commitment_state_management: Arc<StateManager<O>>) -> (Self, mpsc::Receiver<([u8; 32], bool)>) {
-//         let (sender, receiver) = mpsc::channel(100);
-//         (
-//             OptimisticCommitmentManager {
-//                 commitments: Arc::new(RwLock::new(HashMap::new())),
-//                 sender,
-//                 optimistic_commitment_state_management
-//             },
-//             receiver
-//         )
-//     }
-// 
-//     async fn add_commitment(&self, package: PendingStateCommitmentPackage<S>) {
-//         let mut commitments = self.commitments.write().await;
-//         self.optimistic_commitment_state_management.set_state_record(&package);
-//         commitments.insert(package.state_root, CommitmentEntry {
-//             package,
-//             timestamp: Instant::now(),
-//         });
-//     }
-// 
-//     async fn remove_commitment(&self, id: &[u8; 32]) {
-//         let mut commitments = self.commitments.write().await;
-//         self.optimistic_commitment_state_management.delete_state_record(id);
-//         commitments.remove(id);
-//     }
-// 
-//     pub async fn start_optimistic_commitment_processor(self: Arc<Self>, mut receiver: mpsc::Receiver<([u8; 32], bool)>) {
-//         info!("Starting start_optimistic_commitment_processor");
-// 
-//         let commitments = Arc::clone(&self.commitments);
-// 
-//         tokio::spawn(async move {
-//             loop {
-//                 tokio::select! {
-//                     Some((id, success)) = receiver.recv() => {
-//                         if success {
-//                             self.remove_commitment(&id).await;
-//                         }
-//                     }
-//                     _ = tokio::time::sleep(Duration::from_secs(60)) => {
-//                                 info!("checking commit-q for old commits");
-// 
-//                         let mut commitments = commitments.write().await;
-//                         commitments.retain(|_, entry| {
-//                                                             info!("old commit found");
-//                             entry.timestamp.elapsed() < Duration::from_secs(60) // 10 minutes
-//                         });
-//                     }
-//                 }
-//             }
-//         });
-//     }
-// 
-//     fn get_sender(&self) -> mpsc::Sender<([u8; 32], bool)> {
-//         self.sender.clone()
-//     }
-// }

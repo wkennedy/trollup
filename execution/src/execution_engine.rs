@@ -135,6 +135,7 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
         if !successful_txs.is_empty() {
             let commitment_package = StateCommitmentPackage {
                 optimistic: false,
+                state_root: None,
                 state_records: account_states.clone(),
                 transactions: successful_txs,
                 transaction_ids: transaction_ids.clone(),
@@ -147,6 +148,7 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
         if !successful_optimistic_txs.is_empty() {
             let commitment_package = StateCommitmentPackage {
                 optimistic: true,
+                state_root: None,
                 state_records: account_states,
                 transactions: successful_optimistic_txs,
                 transaction_ids,
