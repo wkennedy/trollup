@@ -97,6 +97,7 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
     /// Executes a block by processing a set of transactions.
     pub async fn execute_block(&mut self) {
         let mut tx_pool = self.transaction_pool.lock().await;
+        // TODO - get from config TRANSACTION_BATCH_AMOUNT
         let transactions = tx_pool.get_next_transactions(4);
         drop(tx_pool);
         if transactions.is_empty() {

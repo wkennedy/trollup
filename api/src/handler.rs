@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, TrollupConfig};
 use execution::transaction_pool::TransactionPool;
 use lazy_static::lazy_static;
 use solana_sdk::transaction::Transaction;
@@ -10,7 +10,7 @@ use warp::{http::StatusCode, reply::json, Filter, Rejection, Reply};
 type Result<T> = std::result::Result<T, Rejection>;
 
 lazy_static! {
-    static ref CONFIG: Config = Config::build().unwrap();
+    static ref CONFIG: TrollupConfig = TrollupConfig::build().unwrap();
 }
 
 pub struct Handler {

@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, TrollupConfig};
 use lazy_static::lazy_static;
 use sha2::{Digest, Sha256};
 use state::transaction::{convert_to_solana_transaction, TrollupTransaction};
@@ -9,7 +9,7 @@ use warp::{reply::json, Rejection, Reply};
 type Result<T> = std::result::Result<T, Rejection>;
 
 lazy_static! {
-    static ref CONFIG: Config = Config::build().unwrap();
+    static ref CONFIG: TrollupConfig = TrollupConfig::build().unwrap();
 }
 
 pub struct TransactionHandler<T: ManageState<Record=TrollupTransaction>> {

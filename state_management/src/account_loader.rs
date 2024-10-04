@@ -24,7 +24,7 @@ pub struct TrollupAccountLoader<'a, A: ManageState> {
 
 impl<'a, A: ManageState<Record=AccountState>> TrollupAccountLoader<'a, A> {
     pub fn new(account_state_management: &'a StateManager<A>) -> Self {
-        // TODO load from config
+        // TODO load from config - PROGRAM_IDS_TO_LOAD
         let mut program_ids = HashSet::new();
         // Add the Token program ID
         program_ids.insert(Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap());

@@ -1,19 +1,29 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use std::env;
+use config::{Config, File, FileFormat};
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Default, Clone, PartialEq, Eq, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct Config {
+pub struct TrollupConfig {
     #[serde(default)]
     pub rpc_urls: HashMap<String, String>,
+    #[serde(default)]
+    pub rpc_ws: HashMap<String, String>,
     #[serde(default)]
     pub trollup_validator_url: String,
 }
 
-impl Config {
-    pub fn build() -> Result<Config, &'static str> {
+impl TrollupConfig {
+    
+    pub fn load() {
+        let config = Config::builder()
+            .add_source(File::new("config.toml", FileFormat::Json))
+            .build().expect("Oops");
+    }
+    
+    pub fn build() -> Result<TrollupConfig, &'static str> {
         let rpc_url_dev = env::var("TROLLUP_API_RPC_URL_DEV")
             .unwrap_or("https://api.devnet.solana.com".to_string());
         let rpc_url_test = env::var("TROLLUP_API_RPC_URL_TEST")
@@ -31,7 +41,7 @@ impl Config {
 
         let trollup_validator_url = env::var("TROLLUP_VALIDATOR_URL").unwrap_or("http://localhost:27183".to_string());
 
-        Ok(Config { rpc_urls, trollup_validator_url })
+        Ok(TrollupConfig { rpc_urls, rpc_ws: Default::default(), trollup_validator_url })
     }
 
     pub fn rpc_url(&self, input: &str) -> Result<&str> {

@@ -254,33 +254,6 @@ impl<
                 }
 
                 self.verify_with_validator(commitment_package).await;
-                //     let mut tree_composite = TreeComposite::new();
-                //     tree_composite.add_transactions(&commitment_package.transactions);
-                //
-                //     let account_states = &commitment_package.state_records;
-                //
-                //     tree_composite.add_states(account_states);
-                //     let (_proof_package_lite, proof_package_prepared, proof_package) = generate_proof_load_keys(&account_states);
-                //
-                //     let account_state_root = tree_composite.get_uncommitted_root().expect("Error getting account state root");
-                //
-                //     // TODO get from config
-                //     let validator_client = ValidatorClient::new("http://localhost:27183");
-                //     let validator_result = validator_client.prove(proof_package_prepared, &account_state_root).await;
-                //     match validator_result {
-                //         Ok(response) => {
-                //             info!("Successful response from validator: {:?}", response);
-                //             //TODO get info from validator response
-                //             self.finalize(&mut tree_composite, commitment_package, proof_package, account_state_root).await;
-                //         }
-                //         Err(response) => {
-                //             info!("Unsuccessful response from validator: {:?}", response);
-                //
-                //             // If the validation failed, abort the uncommitted changes.
-                //             tree_composite.transaction_tree.abort_uncommitted();
-                //             tree_composite.state_tree.abort_uncommitted();
-                //         }
-                //     }
             }
         }
     }
@@ -392,7 +365,7 @@ impl<
 
     async fn start_pda_listener(&self, sender: Sender<Value>) {
         // let (tx, mut rx) = mpsc::channel(100);
-        //TODO get from config
+        //TODO get from config PROOF_VERIFIER_PROGRAM_ID
         let program_pubkey = Pubkey::from_str("DBAtuWVrov3Gpi6ji1aVYxyXoiKVyXNe16mJoQRqPYdc")
             .expect("Invalid program ID");
         let sender = sender.clone();
@@ -454,6 +427,7 @@ impl<
                         optimistic_processor_sender.send(CommitmentProcessorMessage {processor_type: OnChain, state_root: entry.package.state_root.unwrap()}).await.expect("TODO: panic message");
 
                     }
+                    //TODO get from config - OPTIMISTIC_TIMEOUT
                     _ = tokio::time::sleep(Duration::from_secs(10)) => {
                                 info!("checking commit-q for old commits");
 
@@ -462,6 +436,7 @@ impl<
 
                         for (key, entry) in read_guard.iter() {
                             info!("{:?}", entry);
+                            //TODO get from config - OPTIMISTIC_TIMEOUT
                             if entry.timestamp.elapsed() < Duration::from_secs(10) {
                                 info!("Old entry found:");
                                     info!("  Key: {:?}", key);
@@ -567,7 +542,7 @@ impl PdaListener {
     }
 
     pub async fn start(&mut self, tx: Sender<Value>) -> Result<(), Box<dyn std::error::Error>> {
-        // TODO get from config
+        // TODO get from config - TROLLUP_API_RPC_WS_DEV
         let url = Url::parse("ws://localhost:8900")?;
         let (ws_stream, _) = connect_async(url).await?;
         let (mut write, mut read) = ws_stream.split();

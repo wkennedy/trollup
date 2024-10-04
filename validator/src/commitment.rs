@@ -77,7 +77,7 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
 
     // Load your Solana wallet keypair
     // TODO remove airdrop
-    // TODO load payer from config
+    // TODO load payer from config - COMMITMENT_FEE_PAYER_KEYPAIR
     let payer = Keypair::new();
     let airdrop_amount = 1_000_000_000; // 1 SOL in lamports
     match request_airdrop(&client, &payer.pubkey(), airdrop_amount).await {
@@ -86,7 +86,7 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
     }
 
     // Your program ID (replace with your actual program ID)
-    // TODO get program ID from config
+    // TODO get program ID from config - SIGNATURE_VERIFIER_PROGRAM_ID
     let program_id = Pubkey::from_str("DBAtuWVrov3Gpi6ji1aVYxyXoiKVyXNe16mJoQRqPYdc").expect("");
 
     // Create and sign the commitment (this would normally be done by the trusted off-chain verifier)

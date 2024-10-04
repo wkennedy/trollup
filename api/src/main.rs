@@ -21,7 +21,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
 use trollup_api::account_handler::AccountHandler;
 use trollup_api::block_handler::BlockHandler;
-use trollup_api::config::{Config, ConfigError};
+use trollup_api::config::{Config, ConfigError, TrollupConfig};
 use trollup_api::handler::Handler;
 use trollup_api::transaction_handler::TransactionHandler;
 use trollup_api::{config, handler};
@@ -39,9 +39,13 @@ use warp::{
 async fn main() {
     env_logger::init();
 
-    let config = Config::build(); //load_config().expect("Error loading config");
+    let config = TrollupConfig::build(); //load_config().expect("Error loading config");
 
     //TODO get this from config
+    //  "ACCOUNT_STATE_MANAGER_DB_PATH": "",
+    //   "BLOCK_STATE_MANAGER_DB_PATH": "",
+    //   "TRANSACTION_STATE_MANAGER_DB_PATH": "",
+    //   "OPTIMISTIC_COMMITMENT_STATE_MANAGER_DB_PATH": ""
     //Initialize our state managers. Currently only sled is implemented, but the idea is to use be able to use different DBs (RocksDB, etc...), but still utilize the StateManager as the interface
     let account_state_manager = Arc::new(StateManager::<SledStateManagement<AccountState>>::new("This is blank for demo purposes, using default location"));
     let block_state_manager = Arc::new(StateManager::<SledStateManagement<Block>>::new("This is blank for demo purposes, using default location"));

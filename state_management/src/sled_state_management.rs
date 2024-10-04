@@ -25,12 +25,14 @@ impl<S: StateRecord> ManageState for SledStateManagement<S> {
 
     #[allow(unused_variables)]
     fn new(path: &str) -> Self {
-        let config = Config::new().temporary(true);
-
-        // TODO get path from config
-        let db = config.open().expect("");
-        // let db = sled::open(path).expect("Failed to open database");
-        Self { db, _marker: PhantomData }
+        if path.is_empty() {
+            let config = Config::new().temporary(true);
+            let db = config.open().expect("");
+            Self { db, _marker: PhantomData }
+        } else {
+            let db = sled::open(path).expect("Failed to open database");
+            Self { db, _marker: PhantomData }
+        }
     }
 
     fn get_all_entries(&self) -> Vec<([u8;32], S)> {
