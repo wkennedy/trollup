@@ -1,4 +1,3 @@
-use crate::config::{TrollupConfig};
 use execution::transaction_pool::TransactionPool;
 use lazy_static::lazy_static;
 use solana_sdk::transaction::Transaction;
@@ -6,6 +5,7 @@ use state::transaction::convert_to_trollup_transaction;
 use std::sync::{Arc};
 use tokio::sync::Mutex;
 use warp::{http::StatusCode, reply::json, Filter, Rejection, Reply};
+use state::config::TrollupConfig;
 
 type Result<T> = std::result::Result<T, Rejection>;
 

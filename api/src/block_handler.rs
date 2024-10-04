@@ -3,7 +3,7 @@ use state::block::Block;
 use state_management::state_management::{ManageState, StateManager};
 use std::sync::Arc;
 use warp::{reply::json, Rejection, Reply};
-use crate::config::TrollupConfig;
+use state::config::TrollupConfig;
 
 type Result<T> = std::result::Result<T, Rejection>;
 

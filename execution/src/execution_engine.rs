@@ -19,9 +19,15 @@ use state_management::account_loader::TrollupAccountLoader;
 use state_management::state_management::{ManageState, StateManager};
 use std::collections::HashMap;
 use std::sync::{Arc};
+use lazy_static::lazy_static;
 use solana_program_runtime::log_collector::log::info;
 use tokio::sync::Mutex;
+use state::config::TrollupConfig;
 use state_commitment::state_commitment_layer::StateCommitmentPackage;
+
+lazy_static! {
+    static ref CONFIG: TrollupConfig = TrollupConfig::build().unwrap();
+}
 
 #[derive(PartialEq, Eq, Debug)]
 enum EngineState {
@@ -97,8 +103,7 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
     /// Executes a block by processing a set of transactions.
     pub async fn execute_block(&mut self) {
         let mut tx_pool = self.transaction_pool.lock().await;
-        // TODO - get from config TRANSACTION_BATCH_AMOUNT
-        let transactions = tx_pool.get_next_transactions(4);
+        let transactions = tx_pool.get_next_transactions(CONFIG.transaction_batch_amount);
         drop(tx_pool);
         if transactions.is_empty() {
             return;

@@ -29,6 +29,7 @@ tokio-tungstenite = "0.20.1"
 tungstenite = "0.20.1"
 futures-util = "0.3.30"
 url = "2.5.2"
+lazy_static = "1.5.0"
 
 [lib]
 doctest = false

@@ -24,6 +24,7 @@ use std::io::{Read, Write};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use lazy_static::lazy_static;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::error::RecvError;
 use tokio::sync::{mpsc, watch, Mutex, RwLock};
@@ -32,6 +33,11 @@ use tokio::time::{timeout, Instant};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use trollup_zk::prove::{generate_proof_load_keys, setup, ProofPackage};
 use url::Url;
+use state::config::TrollupConfig;
+
+lazy_static! {
+    static ref CONFIG: TrollupConfig = TrollupConfig::build().unwrap();
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum CommitmentResultType {
@@ -275,8 +281,7 @@ impl<
             .get_uncommitted_root()
             .expect("Error getting account state root");
 
-        // TODO get from config
-        let validator_client = ValidatorClient::new("http://localhost:27183");
+        let validator_client = ValidatorClient::new(&CONFIG.trollup_validator_url);
         let validator_result = validator_client
             .prove(proof_package_prepared, &account_state_root)
             .await;
@@ -364,9 +369,7 @@ impl<
     }
 
     async fn start_pda_listener(&self, sender: Sender<Value>) {
-        // let (tx, mut rx) = mpsc::channel(100);
-        //TODO get from config PROOF_VERIFIER_PROGRAM_ID
-        let program_pubkey = Pubkey::from_str("DBAtuWVrov3Gpi6ji1aVYxyXoiKVyXNe16mJoQRqPYdc")
+        let program_pubkey = Pubkey::from_str(&CONFIG.proof_verifier_program_id)
             .expect("Invalid program ID");
         let sender = sender.clone();
 
@@ -427,8 +430,7 @@ impl<
                         optimistic_processor_sender.send(CommitmentProcessorMessage {processor_type: OnChain, state_root: entry.package.state_root.unwrap()}).await.expect("TODO: panic message");
 
                     }
-                    //TODO get from config - OPTIMISTIC_TIMEOUT
-                    _ = tokio::time::sleep(Duration::from_secs(10)) => {
+                    _ = tokio::time::sleep(Duration::from_secs(CONFIG.optimistic_timeout)) => {
                                 info!("checking commit-q for old commits");
 
                         // let mut commitments = commitments.write().await;
@@ -436,8 +438,7 @@ impl<
 
                         for (key, entry) in read_guard.iter() {
                             info!("{:?}", entry);
-                            //TODO get from config - OPTIMISTIC_TIMEOUT
-                            if entry.timestamp.elapsed() < Duration::from_secs(10) {
+                            if entry.timestamp.elapsed() < Duration::from_secs(CONFIG.optimistic_timeout) {
                                 info!("Old entry found:");
                                     info!("  Key: {:?}", key);
                                     info!("  Timestamp: {:?}", entry.timestamp);
@@ -542,8 +543,7 @@ impl PdaListener {
     }
 
     pub async fn start(&mut self, tx: Sender<Value>) -> Result<(), Box<dyn std::error::Error>> {
-        // TODO get from config - TROLLUP_API_RPC_WS_DEV
-        let url = Url::parse("ws://localhost:8900")?;
+        let url = Url::parse(&CONFIG.rpc_ws_current_env())?;
         let (ws_stream, _) = connect_async(url).await?;
         let (mut write, mut read) = ws_stream.split();
 

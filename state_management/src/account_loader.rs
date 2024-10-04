@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::str::FromStr;
+use lazy_static::lazy_static;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::native_loader;
@@ -13,7 +14,12 @@ use {
 };
 use log::debug;
 use state::account_state::AccountState;
+use state::config::TrollupConfig;
 use crate::state_management::{ManageState, StateManager};
+
+lazy_static! {
+    static ref CONFIG: TrollupConfig = TrollupConfig::build().unwrap();
+}
 
 pub struct TrollupAccountLoader<'a, A: ManageState> {
     cache: RwLock<HashMap<[u8; 32], AccountSharedData>>,
@@ -24,17 +30,17 @@ pub struct TrollupAccountLoader<'a, A: ManageState> {
 
 impl<'a, A: ManageState<Record=AccountState>> TrollupAccountLoader<'a, A> {
     pub fn new(account_state_management: &'a StateManager<A>) -> Self {
-        // TODO load from config - PROGRAM_IDS_TO_LOAD
         let mut program_ids = HashSet::new();
         // Add the Token program ID
-        program_ids.insert(Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap());
-        program_ids.insert(Pubkey::from_str("1111111QLbz7JHiBTspS962RLKV8GndWFwiEaqKM").unwrap());
-        program_ids.insert(Pubkey::from_str("11111111111111111111111111111111").unwrap());
+        let _ = CONFIG.program_ids_to_load.iter().map(|program_id| program_ids.insert(Pubkey::from_str(program_id).unwrap()));
+        // program_ids.insert(Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap());
+        // program_ids.insert(Pubkey::from_str("1111111QLbz7JHiBTspS962RLKV8GndWFwiEaqKM").unwrap());
+        // program_ids.insert(Pubkey::from_str("11111111111111111111111111111111").unwrap());
 
         Self {
             cache: RwLock::new(HashMap::new()),
             account_state_management,
-            rpc_client: RpcClient::new_with_commitment("https://api.devnet.solana.com".to_string(), CommitmentConfig::confirmed()), //TODO load from config
+            rpc_client: RpcClient::new_with_commitment(&CONFIG.rpc_urls.get("Dev").unwrap(), CommitmentConfig::confirmed()), //TODO load from config
             program_ids,
         }
     }

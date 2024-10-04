@@ -14,7 +14,9 @@ rand = "0.7.3"
 libsecp256k1 = "0.7.1"
 bincode = "1.3.3"
 anyhow = "1.0.86"
-serde = { version = "1.0.209", features = ["derive"] }
+serde = { version = "1.0.210", features = ["derive"] }
+serde_derive = "1.0.210"
+config = "0.14.0"
 
 [lib]
 doctest = false
