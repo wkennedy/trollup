@@ -21,7 +21,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
 use trollup_api::account_handler::AccountHandler;
 use trollup_api::block_handler::BlockHandler;
-use trollup_api::config::{Config, ConfigError, TrollupConfig};
+use trollup_api::config::{ConfigError, TrollupConfig};
 use trollup_api::handler::Handler;
 use trollup_api::transaction_handler::TransactionHandler;
 use trollup_api::{config, handler};
@@ -253,7 +253,7 @@ fn with_value(value: String) -> impl Filter<Extract=(String,), Error=Infallible>
     warp::any().map(move || value.clone())
 }
 
-fn load_config() -> AnyResult<Config> {
+fn load_config() -> AnyResult<TrollupConfig> {
     let args: Vec<String> = env::args().collect();
     let sologger_config_path = if args.len() > 1 {
         args[1].clone()
@@ -274,7 +274,7 @@ fn load_config() -> AnyResult<Config> {
     Ok(sologger_config)
 }
 
-fn with_config(value: Config) -> impl Filter<Extract=(Config,), Error=Infallible> + Clone {
+fn with_config(value: TrollupConfig) -> impl Filter<Extract=(TrollupConfig,), Error=Infallible> + Clone {
     warp::any().map(move || value.clone())
 }
 

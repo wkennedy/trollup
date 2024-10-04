@@ -1,4 +1,4 @@
-use crate::config::{Config, TrollupConfig};
+use crate::config::{TrollupConfig};
 use execution::transaction_pool::TransactionPool;
 use lazy_static::lazy_static;
 use solana_sdk::transaction::Transaction;

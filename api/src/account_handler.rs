@@ -1,4 +1,3 @@
-use crate::config::{Config, TrollupConfig};
 use lazy_static::lazy_static;
 use solana_sdk::pubkey::Pubkey;
 use state::account_state::AccountState;
@@ -7,6 +6,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use warp::{reply::json, Rejection, Reply};
 use state::transaction::convert_to_solana_transaction;
+use crate::config::TrollupConfig;
 
 type Result<T> = std::result::Result<T, Rejection>;
 

@@ -1,10 +1,10 @@
-use crate::config::{Config, TrollupConfig};
 use lazy_static::lazy_static;
 use sha2::{Digest, Sha256};
 use state::transaction::{convert_to_solana_transaction, TrollupTransaction};
 use state_management::state_management::{ManageState, StateManager};
 use std::sync::Arc;
 use warp::{reply::json, Rejection, Reply};
+use crate::config::TrollupConfig;
 
 type Result<T> = std::result::Result<T, Rejection>;
 
