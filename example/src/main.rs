@@ -1,6 +1,7 @@
 use std::time::Duration;
 use reqwest::Client;
 use anyhow::Result;
+use lazy_static::lazy_static;
 use log::info;
 use solana_program::hash::Hash;
 use solana_program::instruction::CompiledInstruction;
@@ -9,8 +10,13 @@ use solana_program::pubkey::Pubkey;
 use solana_program::system_instruction;
 use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::transaction::Transaction;
+use state::config::TrollupConfig;
 
 const BASE_URL: &str = "http://localhost:27182";
+
+lazy_static! {
+    static ref CONFIG: TrollupConfig = TrollupConfig::build().unwrap();
+}
 
 struct TrollupClient {
     client: Client,
@@ -118,6 +124,8 @@ impl TrollupClient {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let _ = TrollupConfig::load();
+
     let client = TrollupClient::new();
 
     // Health check

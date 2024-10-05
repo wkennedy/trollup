@@ -4,4 +4,4 @@ resolver = "2"
 members = [
     "state", "state_commitment", "execution", "example", "state_management", "zk"]
 
-exclude = ["api", "validator"]
+exclude = ["api", "validator", "trollup-initialize-programs"]

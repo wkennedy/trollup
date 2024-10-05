@@ -2,7 +2,7 @@ use crate::error::ValidationError;
 use crate::error::ValidationError::CommitmentTransactionFailed;
 use crate::error::ValidationError::ProofVerificationFailed;
 use ark_serialize::CanonicalSerializeHashExt;
-use borsh::to_vec;
+use borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use libsecp256k1::{Message, PublicKey, SecretKey};
 use log::info;
 use sha2::Sha256;
@@ -24,6 +24,13 @@ use trollup_zk::verify::verify_proof_package;
 
 lazy_static! {
     static ref CONFIG: TrollupConfig = TrollupConfig::build().unwrap();
+}
+
+
+#[derive(BorshSerialize, BorshDeserialize)]
+pub enum ProgramInstruction {
+    Initialize,
+    VerifySig(ZkProofCommitment),
 }
 
 fn create_and_sign_commitment(
@@ -95,6 +102,7 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
     // TODO create and load this from somewhere else
     let secret = SecretKey::default().serialize();
 
+    //TODO update to call specific instruction and call initialize
     let commitment = create_and_sign_commitment(
         new_state_root,
         &secret).unwrap();
@@ -116,19 +124,28 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
     );
 
     // Create the instruction to call our program
-    let accounts = vec![AccountMeta::new(state_account.pubkey(), false)];
-    let instruction = Instruction::new_with_borsh(
+    // let accounts = vec![AccountMeta::new(state_account.pubkey(), false)];
+    let instruction_data = to_vec(&ProgramInstruction::VerifySig(commitment)).unwrap();
+    let (pda, bump_seed) = Pubkey::find_program_address(&[b"state"], &program_id);
+    let instruction = Instruction::new_with_bytes(
         program_id,
-        &commitment,
-        accounts,
+        instruction_data.as_slice(),
+        vec![
+            AccountMeta::new(pda, false),  // PDA account (writable, not signer)
+        ],
     );
+    // let instruction = Instruction::new_with_bytes(
+    //     program_id,
+    //     &commitment,
+    //     accounts,
+    // );
 
     // Create and send the transaction
     let recent_blockhash = client.get_latest_blockhash().await.unwrap();
     let transaction = Transaction::new_signed_with_payer(
-        &[create_account_ix, instruction],
+        &[instruction],
         Some(&payer.pubkey()),
-        &[&payer, &state_account],
+        &[&payer],
         recent_blockhash,
     );
 
