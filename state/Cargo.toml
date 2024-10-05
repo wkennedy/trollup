@@ -17,6 +17,7 @@ anyhow = "1.0.86"
 serde = { version = "1.0.210", features = ["derive"] }
 serde_derive = "1.0.210"
 config = "0.14.0"
+log = "0.4.22"
 
 [lib]
 doctest = false

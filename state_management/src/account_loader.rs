@@ -12,7 +12,7 @@ use {
     solana_svm::transaction_processing_callback::TransactionProcessingCallback,
     std::{collections::HashMap, sync::RwLock},
 };
-use log::debug;
+use log::{debug, info};
 use state::account_state::AccountState;
 use state::config::TrollupConfig;
 use crate::state_management::{ManageState, StateManager};
@@ -32,7 +32,12 @@ impl<'a, A: ManageState<Record=AccountState>> TrollupAccountLoader<'a, A> {
     pub fn new(account_state_management: &'a StateManager<A>) -> Self {
         let mut program_ids = HashSet::new();
         // Add the Token program ID
-        let _ = CONFIG.program_ids_to_load.iter().map(|program_id| program_ids.insert(Pubkey::from_str(program_id).unwrap()));
+        info!("{:?}", &CONFIG.program_ids_to_load);
+        for program_id in &CONFIG.program_ids_to_load {
+            program_ids.insert(Pubkey::from_str(program_id).expect("Error getting pubkey from program ID str"));
+        }
+        // let _ = CONFIG.program_ids_to_load.iter().map(|program_id| {info!("PROGRAM_IDS: {:?}", &program_id);program_ids.insert(Pubkey::from_str(&program_id).unwrap())});
+        info!("PROGRAM_IDS: {:?}", &program_ids);
         // program_ids.insert(Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap());
         // program_ids.insert(Pubkey::from_str("1111111QLbz7JHiBTspS962RLKV8GndWFwiEaqKM").unwrap());
         // program_ids.insert(Pubkey::from_str("11111111111111111111111111111111").unwrap());

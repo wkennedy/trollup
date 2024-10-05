@@ -1,16 +1,10 @@
 use crate::commitment::verify_and_commit;
 use base64::{engine::general_purpose, Engine as _};
-use lazy_static::lazy_static;
 use log::info;
 use serde_derive::{Deserialize, Serialize};
 use trollup_zk::prove::ProofPackagePrepared;
 use warp::reply::json;
 use warp::{http::StatusCode, Rejection, Reply};
-use crate::config::Config;
-
-lazy_static! {
-    static ref CONFIG: Config = Config::build().unwrap();
-}
 
 type Result<T> = std::result::Result<T, Rejection>;
 

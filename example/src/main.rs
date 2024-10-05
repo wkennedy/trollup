@@ -166,7 +166,7 @@ async fn main() -> Result<()> {
     let transaction_details = client.get_transaction(signature).await?;
     println!("Transaction details: {}", transaction_details);
 
-        tokio::time::sleep(Duration::from_secs(3)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
     let account = client.get_all_accounts().await?;
     println!("Account details: {}", account);

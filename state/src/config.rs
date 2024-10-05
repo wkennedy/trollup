@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::env;
 use config::{Config, File, FileFormat};
 use serde_derive::{Deserialize, Serialize};
+use log::info;
 
 #[derive(Serialize, Deserialize, Default, Clone, PartialEq, Eq, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -67,7 +68,9 @@ impl TrollupConfig {
 
         // Handle PROGRAM_IDS_TO_LOAD separately as it's an array
         if let Ok(program_ids) = config.get::<Vec<String>>("PROGRAM_IDS_TO_LOAD") {
+            println!("PROGRAM_ID: {:?}", program_ids);
             env::set_var("PROGRAM_IDS_TO_LOAD", program_ids.join(","));
+            println!("{:?}", env::var("PROGRAM_IDS_TO_LOAD"));
         }
         
         Ok(())

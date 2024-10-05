@@ -116,7 +116,6 @@ impl<S: StateRecord> StateCommitmentPackage<S> {
 }
 
 pub trait StateCommitter<T: StateRecord> {
-    fn start_listeners(&self) -> impl Future<Output = ()>;
     fn start(&mut self) -> impl Future<Output = ()>;
     fn stop(&mut self) -> impl Future<Output = ()>;
 }
@@ -231,21 +230,23 @@ impl<
             Some(commitment_package) => {
                 // Create proof, send proof to validator, once validator commits to a verify, then commit account and block changes to db
 
-                let mut tree_composite = TreeComposite::new();
-                tree_composite.add_transactions(&commitment_package.transactions);
-
-                let account_states = &commitment_package.state_records;
-
-                tree_composite.add_states(account_states);
-                let (_proof_package_lite, proof_package_prepared, proof_package) =
-                    generate_proof_load_keys(&account_states);
-
-                let account_state_root = tree_composite
-                    .get_uncommitted_root()
-                    .expect("Error getting account state root");
+                
 
                 // TODO send optimistic transactions to thread listening for PDA updates for proof verification
                 if commitment_package.optimistic {
+                    let mut tree_composite = TreeComposite::new();
+                    tree_composite.add_transactions(&commitment_package.transactions);
+
+                    let account_states = &commitment_package.state_records;
+
+                    tree_composite.add_states(account_states);
+                    let (_proof_package_lite, proof_package_prepared, proof_package) =
+                        generate_proof_load_keys(account_states.clone());
+
+                    let account_state_root = tree_composite
+                        .get_uncommitted_root()
+                        .expect("Error getting account state root");
+                    
                     // self.handle_optimistic_transactions(optimistic_txs, account_states.clone(), account_state_root);
                     info!("Adding optimistic commitment to opti-q");
                     let pending_state_commitment_package = StateCommitmentPackage {
@@ -275,7 +276,7 @@ impl<
 
         tree_composite.add_states(account_states);
         let (_proof_package_lite, proof_package_prepared, proof_package) =
-            generate_proof_load_keys(&account_states);
+            generate_proof_load_keys(account_states.clone());
 
         let account_state_root = tree_composite
             .get_uncommitted_root()
@@ -466,22 +467,14 @@ impl<
         O: ManageState<Record = StateCommitmentPackage<AccountState>> + Send + Sync + 'static,
     > StateCommitter<AccountState> for StateCommitment<'a, A, B, T, O>
 {
-    async fn start_listeners(&self) {
-        // self.optimistic_commitment_manager;
-    }
-    
     async fn start(&mut self) {
-        // let (manager, receiver) = OptimisticCommitmentManager::<AccountState, O>::new(Arc::clone(&self.optimistic_commitment_state_management));
-        // let manager = Arc::new(manager);
-        // let manager_clone = Arc::clone(&manager);
+
         let (pda_sender, pda_receiver) = mpsc::channel(100);
         let (optimistic_processor_sender, mut optimistic_processor_receiver) =
             mpsc::channel::<CommitmentProcessorMessage>(100);
 
         self.start_optimistic_commitment_processor(pda_receiver, optimistic_processor_sender)
             .await;
-        // self.optimistic_commitment_manager = manager_clone;
-        // self.receiver = Some(receiver);
 
         self.committer_state = CommitterState::Running;
         setup(true);

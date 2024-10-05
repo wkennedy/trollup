@@ -27,7 +27,7 @@ pub fn convert_endianness_64_to_vec(bytes: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-pub fn convert_endianness_128(bytes: &[u8]) -> Vec<u8> {
+pub fn convert_endianness_128_to_vec(bytes: &[u8]) -> Vec<u8> {
     bytes.chunks(64)
         .flat_map(|chunk| chunk.iter().rev().cloned().collect::<Vec<u8>>())
         .collect()
@@ -41,9 +41,25 @@ pub fn convert_endianness_64(input: &[u8]) -> [u8; 64] {
     output
 }
 
+pub fn convert_endianness_96(input: &[u8]) -> [u8; 96] {
+    let mut output = [0u8; 96];
+    for (i, &byte) in input.iter().enumerate().take(96) {
+        output[i] = byte.swap_bytes(); // This swaps endianness for each byte
+    }
+    output
+}
+
 pub fn convert_endianness_32(input: &[u8]) -> [u8; 32] {
     let mut output = [0u8; 32];
     for (i, &byte) in input.iter().enumerate().take(32) {
+        output[i] = byte.swap_bytes(); // This swaps endianness for each byte
+    }
+    output
+}
+
+pub fn convert_endianness_128(input: &[u8]) -> [u8; 128] {
+    let mut output = [0u8; 128];
+    for (i, &byte) in input.iter().enumerate().take(128) {
         output[i] = byte.swap_bytes(); // This swaps endianness for each byte
     }
     output
@@ -64,22 +80,6 @@ pub fn fr_to_g1(scalar: &Fr) -> G1Affine {
     let point = G1Projective::from(generator) * scalar;
     point.into_affine()
 }
-
-// The generator point of G1 in uncompressed form
-// const G1_GENERATOR: [u8; 64] = [
-//     1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-//     2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-// ];
-//
-// fn fr_to_g1_solana(scalar: &[u8; 32]) -> Result<[u8; 64], ProgramError> {
-//     let mut result = [0u8; 64];
-//     alt_bn128_multiplication(&[&G1_GENERATOR[..], scalar].concat(), &mut result)
-//         .map_err(|_| ProgramError::InvalidAccountData)?;
-//
-//     Ok(result)
-// }
 
 pub fn g1_affine_to_bytes(point: &G1Affine) -> [u8; 64] {
     let mut bytes = [0u8; 64];

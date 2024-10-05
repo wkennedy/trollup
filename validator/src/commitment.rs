@@ -17,8 +17,14 @@ use solana_sdk::{
 };
 use state::state_record::{StateRecord, ZkProofCommitment};
 use std::str::FromStr;
+use lazy_static::lazy_static;
+use state::config::TrollupConfig;
 use trollup_zk::prove::{ProofPackage, ProofPackagePrepared};
 use trollup_zk::verify::verify_proof_package;
+
+lazy_static! {
+    static ref CONFIG: TrollupConfig = TrollupConfig::build().unwrap();
+}
 
 fn create_and_sign_commitment(
     new_state_root: [u8; 32],
@@ -53,10 +59,7 @@ fn create_and_sign_commitment(
 }
 
 pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new_state_root: [u8; 32]) -> Result<bool, ValidationError> {
-    // Connect to the Solana localnet
-    // TODO get from config
-    let rpc_url = "http://127.0.0.1:8899".to_string();
-    let client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::confirmed());
+    let client = RpcClient::new_with_commitment(CONFIG.rpc_url_current_env().to_string(), CommitmentConfig::confirmed());
 
     let proof_package: ProofPackage = proof_package_prepared.into();
     let is_valid = verify_proof_package(&proof_package);
@@ -86,8 +89,7 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
     }
 
     // Your program ID (replace with your actual program ID)
-    // TODO get program ID from config - SIGNATURE_VERIFIER_PROGRAM_ID
-    let program_id = Pubkey::from_str("DBAtuWVrov3Gpi6ji1aVYxyXoiKVyXNe16mJoQRqPYdc").expect("");
+    let program_id = Pubkey::from_str(&CONFIG.signature_verifier_program_id).expect("");
 
     // Create and sign the commitment (this would normally be done by the trusted off-chain verifier)
     // TODO create and load this from somewhere else
