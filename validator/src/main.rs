@@ -7,6 +7,8 @@ use std::sync::Arc;
 
 use anyhow::Result as AnyResult;
 use log::{info, trace};
+use state::config::TrollupConfig;
+use trollup_validator::handler;
 use utoipa::{Modify, OpenApi};
 use utoipa_swagger_ui::Config as SwaggerConfig;
 use warp::body::json;
@@ -16,8 +18,6 @@ use warp::{
     path::{FullPath, Tail},
     Filter, Rejection, Reply,
 };
-use state::config::TrollupConfig;
-use trollup_validator::handler;
 
 type Result<T> = std::result::Result<T, Rejection>;
 
@@ -76,10 +76,6 @@ async fn main() {
 fn with_value(value: String) -> impl Filter<Extract=(String,), Error=Infallible> + Clone {
     warp::any().map(move || value.clone())
 }
-
-// fn with_config(value: Config) -> impl Filter<Extract = (Config,), Error = Infallible> + Clone {
-//     warp::any().map(move || value.clone())
-// }
 
 async fn serve_swagger(
     full_path: FullPath,

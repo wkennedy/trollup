@@ -166,7 +166,7 @@ async fn main() -> Result<()> {
         },
     };
 
-    let send_result = client.send_transaction_optimistic(&transaction).await?;
+    let send_result = client.send_transaction(&transaction).await?;
     println!("Send transaction result: {}", send_result);
 
     // Get transaction details

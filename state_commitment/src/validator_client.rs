@@ -3,11 +3,12 @@ use serde::{Deserialize, Serialize};
 use anyhow::Result;
 use trollup_zk::prove::ProofPackagePrepared;
 use base64::{Engine as _, engine::general_purpose};
+use solana_sdk::signature::Signature;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApiResponse {
-    //TODO update this for the actual response from the validator
-    pub message: String,
+    pub success: bool,
+    pub signature: Signature
 }
 
 pub struct ValidatorClient {
@@ -34,7 +35,7 @@ impl ValidatorClient {
 
     pub async fn prove(&self, proof_package: ProofPackagePrepared, new_state_root: &[u8; 32]) -> Result<ApiResponse> {
         let response = self.client
-            .post(&format!("{}/prove/{}", self.base_url, general_purpose::STANDARD.encode(new_state_root)))
+            .post(&format!("{}/prove/{}", self.base_url, general_purpose::URL_SAFE.encode(new_state_root)))
             .json(&proof_package)
             .send()
             .await?;

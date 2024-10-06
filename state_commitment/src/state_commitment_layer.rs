@@ -4,16 +4,21 @@ use crate::validator_client::ValidatorClient;
 use ark_serialize::CanonicalSerialize;
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use futures_util::{SinkExt, StreamExt};
+use lazy_static::lazy_static;
 use log::info;
 use rs_merkle::algorithms::Sha256;
 use rs_merkle::{Hasher, MerkleTree};
 use serde_json::{json, Value};
 use sha2::Digest;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_client::rpc_config::RpcTransactionConfig;
+use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use solana_transaction_status::UiTransactionEncoding;
 use state::account_state::AccountState;
 use state::block::Block;
+use state::config::TrollupConfig;
 use state::state_record::StateRecord;
 use state::transaction::TrollupTransaction;
 use state_management::state_management::{ManageState, StateManager};
@@ -24,7 +29,6 @@ use std::io::{Read, Write};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use lazy_static::lazy_static;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::error::RecvError;
 use tokio::sync::{mpsc, watch, Mutex, RwLock};
@@ -33,7 +37,6 @@ use tokio::time::{timeout, Instant};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use trollup_zk::prove::{generate_proof_load_keys, setup, ProofPackage};
 use url::Url;
-use state::config::TrollupConfig;
 
 lazy_static! {
     static ref CONFIG: TrollupConfig = TrollupConfig::build().unwrap();
@@ -230,8 +233,6 @@ impl<
             Some(commitment_package) => {
                 // Create proof, send proof to validator, once validator commits to a verify, then commit account and block changes to db
 
-                
-
                 // TODO send optimistic transactions to thread listening for PDA updates for proof verification
                 if commitment_package.optimistic {
                     let mut tree_composite = TreeComposite::new();
@@ -246,7 +247,7 @@ impl<
                     let account_state_root = tree_composite
                         .get_uncommitted_root()
                         .expect("Error getting account state root");
-                    
+
                     // self.handle_optimistic_transactions(optimistic_txs, account_states.clone(), account_state_root);
                     info!("Adding optimistic commitment to opti-q");
                     let pending_state_commitment_package = StateCommitmentPackage {
@@ -288,15 +289,44 @@ impl<
             .await;
         match validator_result {
             Ok(response) => {
-                info!("Successful response from validator: {:?}", response);
-                //TODO get info from validator response
-                self.finalize(
-                    &mut tree_composite,
-                    commitment_package,
-                    proof_package,
-                    account_state_root,
-                )
-                .await;
+                if response.success {
+                    info!("Successful response from validator: {:?}", response);
+                    let client = RpcClient::new(CONFIG.rpc_url_current_env().to_string());
+                    // Check the transaction status
+                    loop {
+                        let is_transaction_finalized = client
+                            .confirm_transaction(&response.signature)
+                            .await
+                            .expect("Error confirming sig verifier transaction");
+                        if (is_transaction_finalized) {
+                            break;
+                        }
+                        //TODO bail out of this with a timeout and fail finalization
+                    }
+                    let transaction_status = client
+                        .get_transaction(&response.signature, UiTransactionEncoding::JsonParsed)
+                        .await
+                        .expect("Error getting transaction.");
+
+                    // Check if the transaction was successful
+                    match transaction_status.transaction.meta {
+                        Some(meta) => {
+                            if meta.err.is_none() {
+                                println!("Transaction was successful! Finalizing account state.");
+                                self.finalize(
+                                    &mut tree_composite,
+                                    commitment_package,
+                                    proof_package,
+                                    account_state_root,
+                                )
+                                .await;
+                            } else {
+                                println!("Transaction failed: {:?}", meta.err);
+                            }
+                        }
+                        None => println!("Transaction status not available"),
+                    }
+                }
             }
             Err(response) => {
                 info!("Unsuccessful response from validator: {:?}", response);
@@ -370,8 +400,8 @@ impl<
     }
 
     async fn start_pda_listener(&self, sender: Sender<Value>) {
-        let program_pubkey = Pubkey::from_str(&CONFIG.proof_verifier_program_id)
-            .expect("Invalid program ID");
+        let program_pubkey =
+            Pubkey::from_str(&CONFIG.proof_verifier_program_id).expect("Invalid program ID");
         let sender = sender.clone();
 
         // Start the PDA listener in a new thread
@@ -434,7 +464,6 @@ impl<
                     _ = tokio::time::sleep(Duration::from_secs(CONFIG.optimistic_timeout)) => {
                                 info!("checking commit-q for old commits");
 
-                        // let mut commitments = commitments.write().await;
                         let read_guard = commitments.read().await;
 
                         for (key, entry) in read_guard.iter() {
@@ -453,10 +482,6 @@ impl<
             }
         });
     }
-
-    // fn get_sender(&self) -> Sender<Value> {
-    //     self.sender.expect("").clone()
-    // }
 }
 
 impl<
@@ -468,7 +493,6 @@ impl<
     > StateCommitter<AccountState> for StateCommitment<'a, A, B, T, O>
 {
     async fn start(&mut self) {
-
         let (pda_sender, pda_receiver) = mpsc::channel(100);
         let (optimistic_processor_sender, mut optimistic_processor_receiver) =
             mpsc::channel::<CommitmentProcessorMessage>(100);
@@ -493,7 +517,7 @@ impl<
                             Some(commitment_processor_message) => {
                                 info!("Received from optimistic processor: {:?}", commitment_processor_message);
                                     match commitment_processor_message.processor_type {
-    
+
                                         OnChain => {}
                                         TimeOut => {
                                             let read_guard = commitments.read().await;
@@ -502,7 +526,7 @@ impl<
                                             self.verify_with_validator(entry.package.clone()).await;
                                         }
                                     }
-    
+
                             }
                             None => {
                                 // info!("Optimistic processor channel closed");
@@ -511,7 +535,7 @@ impl<
                             }
                         }
                     }
-                    
+
                     _ = self.read_from_pool() => {
                         // read_from_pool completed, you can add any post-processing here if needed
                     }

@@ -3,6 +3,7 @@ use crate::error::ValidationError::CommitmentTransactionFailed;
 use crate::error::ValidationError::ProofVerificationFailed;
 use ark_serialize::CanonicalSerializeHashExt;
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
+use lazy_static::lazy_static;
 use libsecp256k1::{Message, PublicKey, SecretKey};
 use log::info;
 use sha2::Sha256;
@@ -15,17 +16,17 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     transaction::Transaction,
 };
-use state::state_record::{StateRecord, ZkProofCommitment};
-use std::str::FromStr;
-use lazy_static::lazy_static;
 use state::config::TrollupConfig;
+use state::state_record::{ZkProofCommitment};
+use std::str::FromStr;
+use serde_json::{json, Value};
 use trollup_zk::prove::{ProofPackage, ProofPackagePrepared};
 use trollup_zk::verify::verify_proof_package;
+use crate::models::ApiResponse;
 
 lazy_static! {
     static ref CONFIG: TrollupConfig = TrollupConfig::build().unwrap();
 }
-
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub enum ProgramInstruction {
@@ -65,7 +66,7 @@ fn create_and_sign_commitment(
     })
 }
 
-pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new_state_root: [u8; 32]) -> Result<bool, ValidationError> {
+pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new_state_root: [u8; 32]) -> Result<ApiResponse, ValidationError> {
     let client = RpcClient::new_with_commitment(CONFIG.rpc_url_current_env().to_string(), CommitmentConfig::confirmed());
 
     let proof_package: ProofPackage = proof_package_prepared.into();
@@ -124,7 +125,6 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
     );
 
     // Create the instruction to call our program
-    // let accounts = vec![AccountMeta::new(state_account.pubkey(), false)];
     let instruction_data = to_vec(&ProgramInstruction::VerifySig(commitment)).unwrap();
     let (pda, bump_seed) = Pubkey::find_program_address(&[b"state"], &program_id);
     let instruction = Instruction::new_with_bytes(
@@ -134,11 +134,6 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
             AccountMeta::new(pda, false),  // PDA account (writable, not signer)
         ],
     );
-    // let instruction = Instruction::new_with_bytes(
-    //     program_id,
-    //     &commitment,
-    //     accounts,
-    // );
 
     // Create and send the transaction
     let recent_blockhash = client.get_latest_blockhash().await.unwrap();
@@ -153,7 +148,11 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
     match client.send_and_confirm_transaction(&transaction).await {
         Ok(signature) => {
             info!("Transaction succeeded: {:?}", &signature);
-            Ok(true)
+            let response = ApiResponse {
+                success: true,
+                signature,
+            };
+            Ok(response)
         }
         Err(err) => {
             info!("Error sending transaction: {}", err);
