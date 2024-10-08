@@ -19,7 +19,7 @@ use ark_std::{rand::thread_rng, One, UniformRand};
 use light_poseidon::{Poseidon, PoseidonHasher};
 use borsh::{BorshSerialize, BorshDeserialize, to_vec};
 use base64::{encode, decode};
-
+use tokio::fs;
 
 #[derive(BorshSerialize)]
 enum ProgramInstruction {
@@ -37,15 +37,12 @@ async fn main() {
     let client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::confirmed());
     
     // Load or create a keypair for the payer
-    let payer = Keypair::new();
-    let airdrop_amount = 1_000_000_000; // 1 SOL in lamports
-    match request_airdrop(&client, &payer.pubkey(), airdrop_amount).await {
-        Ok(_) => println!("Airdrop successful!"),
-        Err(err) => eprintln!("Airdrop failed: {}", err),
-    }
+
+    let trollup_api_keypair: Vec<u8> = fs::read("api/config/local/keypair.json").await.expect("Error loading keypair");
+    let payer = Keypair::from_bytes(trollup_api_keypair.as_slice()).unwrap();
 
     // Define the program ID (replace with your actual program ID)
-    let program_id = Pubkey::from_str(SIGNATURE_VERIFIER_PROGRAM_ID).unwrap(); // Replace with your actual program ID
+    let program_id = Pubkey::from_str(PROOF_VERIFIER_PROGRAM_ID).unwrap(); // Replace with your actual program ID
 
     // Derive the PDA (Program Derived Address)
     let (pda, _) = Pubkey::find_program_address(&[b"state"], &program_id);

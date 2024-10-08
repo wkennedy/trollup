@@ -28,6 +28,9 @@ lazy_static! {
     static ref CONFIG: TrollupConfig = TrollupConfig::build().unwrap();
 }
 
+lazy_static! {
+}
+
 #[derive(BorshSerialize, BorshDeserialize)]
 pub enum ProgramInstruction {
     Initialize,
@@ -87,14 +90,7 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
         .as_secs();
 
     // Load your Solana wallet keypair
-    // TODO remove airdrop
-    // TODO load payer from config - COMMITMENT_FEE_PAYER_KEYPAIR
-    let payer = Keypair::new();
-    let airdrop_amount = 1_000_000_000; // 1 SOL in lamports
-    match request_airdrop(&client, &payer.pubkey(), airdrop_amount).await {
-        Ok(_) => info!("Airdrop successful!"),
-        Err(err) => eprintln!("Airdrop failed: {}", err),
-    }
+    let payer = Keypair::from_bytes(&CONFIG.trollup_api_keypair).expect("Error loading API keypair");
 
     // Your program ID (replace with your actual program ID)
     let program_id = Pubkey::from_str(&CONFIG.signature_verifier_program_id).expect("");
@@ -159,19 +155,6 @@ pub async fn verify_and_commit(proof_package_prepared: ProofPackagePrepared, new
             Err(CommitmentTransactionFailed)
         }
     }
-}
-
-async fn request_airdrop(client: &RpcClient, pubkey: &Pubkey, amount: u64) -> Result<(), Box<dyn std::error::Error>> {
-    let signature = client.request_airdrop(pubkey, amount).await?;
-
-    // Wait for the transaction to be confirmed
-    loop {
-        let confirmation = client.confirm_transaction(&signature).await.unwrap();
-        if confirmation {
-            break;
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]

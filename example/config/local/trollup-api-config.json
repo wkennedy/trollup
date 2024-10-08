@@ -9,6 +9,8 @@
   "TROLLUP_API_RPC_WS_TEST": "wss://api.testnet.solana.com",
   "TROLLUP_API_RPC_WS_MAIN": "wss://api.mainnet.solana.com",
   "TROLLUP_API_RPC_WS_LOCAL": "ws://localhost:8900",
+  "TROLLUP_API_KEYPAIR_PATH": "/api/config/local/keypair.json",
+  "TROLLUP_VALIDATOR_KEYPAIR_PATH": "/api/config/local/keypair.json",
   "ACCOUNT_STATE_MANAGER_DB_PATH": "",
   "BLOCK_STATE_MANAGER_DB_PATH": "",
   "TRANSACTION_STATE_MANAGER_DB_PATH": "",

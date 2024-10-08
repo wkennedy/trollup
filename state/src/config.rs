@@ -1,9 +1,8 @@
 use anyhow::Result;
-use std::collections::HashMap;
-use std::env;
 use config::{Config, File, FileFormat};
 use serde_derive::{Deserialize, Serialize};
-use log::info;
+use std::collections::HashMap;
+use std::{env, fs};
 
 #[derive(Serialize, Deserialize, Default, Clone, PartialEq, Eq, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -36,13 +35,22 @@ pub struct TrollupConfig {
     pub optimistic_timeout: u64,
     #[serde(default)]
     pub transaction_batch_amount: u32,
+    #[serde(default)]
+    pub trollup_api_keypair_path: String,
+    #[serde(default)]
+    pub trollup_validator_keypair_path: String,
+    #[serde(default)]
+    pub trollup_api_keypair: Vec<u8>,
+    #[serde(default)]
+    pub trollup_validator_keypair: Vec<u8>,
 }
 
 impl TrollupConfig {
     
     pub fn load() -> Result<(), Box<dyn std::error::Error>> {
+        let config_path = env::var("TROLLUP_CONFIG_PATH").unwrap_or("/config/trollup-api-config.json".to_string()).to_string();
         let config = Config::builder()
-            .add_source(File::new("/home/waggins/projects/trollup/api/config/local/trollup-api-config.json", FileFormat::Json))
+            .add_source(File::new(&config_path, FileFormat::Json))
             .build()?;
 
         // Set environment variables
@@ -65,6 +73,8 @@ impl TrollupConfig {
         set_env(&config, "COMMITMENT_FEE_PAYER_KEYPAIR")?;
         set_env(&config, "OPTIMISTIC_TIMEOUT")?;
         set_env(&config, "TRANSACTION_BATCH_AMOUNT")?;
+        set_env(&config, "TROLLUP_VALIDATOR_KEYPAIR_PATH")?;
+        set_env(&config, "TROLLUP_API_KEYPAIR_PATH")?;
 
         // Handle PROGRAM_IDS_TO_LOAD separately as it's an array
         if let Ok(program_ids) = config.get::<Vec<String>>("PROGRAM_IDS_TO_LOAD") {
@@ -88,7 +98,10 @@ impl TrollupConfig {
         rpc_ws.insert("Test".to_string(), env::var("TROLLUP_API_RPC_WS_TEST").unwrap_or("wss://api.testnet.solana.com".to_string()));
         rpc_ws.insert("Main".to_string(), env::var("TROLLUP_API_RPC_WS_MAIN").unwrap_or("wss://api.mainnet.solana.com".to_string()));
         rpc_ws.insert("Local".to_string(), env::var("TROLLUP_API_RPC_WS_LOCAL").unwrap_or("ws://localhost:8900".to_string()));
-        
+
+        let trollup_validator_keypair: Vec<u8> = fs::read(env::var("TROLLUP_VALIDATOR_KEYPAIR_PATH").expect("Keypair not configured")).expect("Error loading keypair");
+        let trollup_api_keypair: Vec<u8> = fs::read(env::var("TROLLUP_API_KEYPAIR_PATH").expect("Keypair not configured")).expect("Error loading keypair");
+
         Ok(TrollupConfig {
             rpc_urls,
             rpc_ws,
@@ -104,6 +117,8 @@ impl TrollupConfig {
                 .map(|ids| ids.split(',').map(String::from).collect())
                 .unwrap_or_default(),
             commitment_fee_payer_keypair: env::var("COMMITMENT_FEE_PAYER_KEYPAIR").unwrap_or_default(),
+            trollup_api_keypair_path: env::var("TROLLUP_VALIDATOR_KEYPAIR_PATH").unwrap_or_default(),
+            trollup_validator_keypair_path: env::var("TROLLUP_API_KEYPAIR_PATH").unwrap_or_default(),
             optimistic_timeout: env::var("OPTIMISTIC_TIMEOUT")
                 .ok()
                 .and_then(|v| v.parse().ok())
@@ -112,6 +127,8 @@ impl TrollupConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(10),
+            trollup_validator_keypair,
+            trollup_api_keypair
         })
     }
 

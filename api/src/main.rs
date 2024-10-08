@@ -22,8 +22,6 @@ use trollup_api::block_handler::BlockHandler;
 use trollup_api::handler::Handler;
 use trollup_api::optimistic_handler::OptimisticHandler;
 use trollup_api::transaction_handler::TransactionHandler;
-use utoipa::openapi::path::ParameterIn::Path;
-use utoipa::openapi::{Info, OpenApiBuilder, Paths};
 use utoipa::{Modify, OpenApi};
 use utoipa_gen::ToSchema;
 use utoipa_swagger_ui::Config as SwaggerConfig;
@@ -89,7 +87,8 @@ async fn main() {
     // let routes = routes(transaction_pool);
     let routes = routes(Arc::clone(&transaction_pool), Arc::clone(&account_state_manager), Arc::clone(&transaction_state_manager), Arc::clone(&block_state_manager), Arc::clone(&optimistic_commitment_state_management));
 
-    warp::serve(routes).run(([0, 0, 0, 0], 27182)).await;
+    let cors = warp::cors().allow_any_origin();
+    warp::serve(routes.with(cors)).run(([0, 0, 0, 0], 27182)).await;
 
     // Wait for the thread to finish
     engine_handle.join().unwrap();

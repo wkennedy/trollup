@@ -1,29 +1,30 @@
-use std::ops::Neg;
-use std::str::FromStr;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
-use trollup_zk::verify_lite::{convert_arkworks_vk_to_solana_example, Groth16VerifierPrepared, Groth16VerifyingKeyPrepared, ProofCommitmentPackage};
 use anyhow::Result;
+use ark_bn254::Bn254;
+use ark_groth16::{Proof, VerifyingKey};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
+use borsh::to_vec;
+use borsh_derive::{BorshDeserialize, BorshSerialize};
 use lazy_static::lazy_static;
 use log::info;
 use reqwest::Client;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_program::alt_bn128::compression::prelude::convert_endianness;
 use solana_program::hash::Hash;
 use solana_program::instruction::{AccountMeta, CompiledInstruction, Instruction};
 use solana_program::message::{Message, MessageHeader};
 use solana_program::pubkey::Pubkey;
 use solana_program::system_instruction;
+use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::transaction::Transaction;
 use state::account_state::AccountState;
 use state::config::TrollupConfig;
 use state::state_record::{StateCommitmentPackage, StateCommitmentPackageUI};
+use std::ops::Neg;
+use std::str::FromStr;
 use std::time::Duration;
-use ark_bn254::Bn254;
-use ark_groth16::{Proof, VerifyingKey};
-use borsh::to_vec;
-use borsh_derive::{BorshDeserialize, BorshSerialize};
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_program::alt_bn128::compression::prelude::convert_endianness;
-use solana_sdk::commitment_config::CommitmentConfig;
+use tokio::fs;
+use trollup_zk::verify_lite::{convert_arkworks_vk_to_solana_example, Groth16VerifierPrepared, Groth16VerifyingKeyPrepared, ProofCommitmentPackage};
 
 const BASE_URL: &str = "http://localhost:27182";
 
@@ -239,13 +240,14 @@ async fn main() -> Result<()> {
 
     let commitment_packages = client.get_all_pending_commits_full().await.expect("TODO: panic message");
 
-    let payer = Keypair::new();
-    let airdrop_amount = 1_000_000_000; // 1 SOL in lamports
-    match request_airdrop(&rpc_client, &payer.pubkey(), airdrop_amount).await {
-        Ok(_) => println!("Airdrop successful!"),
-        Err(err) => eprintln!("Airdrop failed: {}", err),
-    }
-
+    let trollup_api_keypair: Vec<u8> = fs::read("api/config/local/keypair.json").await.expect("Error loading keypair");
+    let payer = Keypair::from_bytes(trollup_api_keypair.as_slice()).unwrap();
+    // let payer = Keypair::new();
+    // let airdrop_amount = 1_000_000; // 1 SOL in lamports
+    // match request_airdrop(&rpc_client, &payer.pubkey(), airdrop_amount).await {
+    //     Ok(_) => println!("Airdrop successful!"),
+    //     Err(err) => eprintln!("Airdrop failed: {}", err),
+    // }
     
     for commitment_package in commitment_packages {
         let verifier_prepared = build_verifier(commitment_package.proof, commitment_package.public_inputs, commitment_package.verifying_key);
@@ -265,13 +267,6 @@ async fn main() -> Result<()> {
                 AccountMeta::new(pda, false),  // PDA account (writable, not signer)
             ],
         );
-
-        // Create the instruction
-        // let instruction = Instruction::new_with_bytes(
-        //     program_id,
-        //     serialized_proof.as_slice(),
-        //     vec![AccountMeta::new(payer.pubkey(), true)],
-        // );
 
         // Create and send the transaction
         let recent_blockhash = rpc_client.get_latest_blockhash().await.unwrap();
@@ -293,15 +288,8 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-
 fn build_verifier(proof_bytes: Vec<u8>, public_inputs: Vec<u8>, verifying_key: Vec<u8>) -> Groth16VerifierPrepared {
-    // let proof = Groth16::<Bn254>::prove(&pk, c2, rng).unwrap();
     let proof = Proof::<Bn254>::deserialize_uncompressed_unchecked(proof_bytes.as_slice()).expect("Error deserializing proof");
-    // println!("Arkworks Verification:");
-    // println!("Public Input: {:?}", Fr::from(100));
-    // println!("Proof A: {:?}", proof.a);
-    // println!("Proof B: {:?}", proof.b);
-    // println!("Proof C: {:?}", proof.c);
 
     let proof_with_neg_a = Proof::<Bn254> {
         a: proof.a.neg(),
@@ -314,17 +302,7 @@ fn build_verifier(proof_bytes: Vec<u8>, public_inputs: Vec<u8>, verifying_key: V
     let proof_a: [u8; 64] = convert_endianness::<32, 64>(proof_bytes[0..64].try_into().unwrap());
     let proof_b: [u8; 128] = convert_endianness::<64, 128>(proof_bytes[64..192].try_into().unwrap());
     let proof_c: [u8; 64] = convert_endianness::<32, 64>(proof_bytes[192..256].try_into().unwrap());
-
-    // let mut vk_bytes = Vec::with_capacity(vk.serialized_size(Compress::No));
-    // vk.serialize_uncompressed(&mut vk_bytes).expect("");
-
-    // let pvk = prepare_verifying_key(&vk);
-    // let mut pvk_bytes = Vec::with_capacity(pvk.serialized_size(Compress::No));
-    // pvk.serialize_uncompressed(&mut pvk_bytes).expect("");
-
-    // let projective: G1Projective = prepare_inputs(&proof_package.prepared_verifying_key.vk, &[Fr::from(100)]).expect("Error preparing inputs with public inputs and prepared verifying key");
-    // let mut g1_bytes = Vec::with_capacity(proof_package.public_inputs.serialized_size(Compress::No));
-    // proof_package.public_inputs.serialize_uncompressed(&mut g1_bytes).expect("");
+    
     let prepared_public_input = convert_endianness::<32, 64>(<&[u8; 64]>::try_from(public_inputs.as_slice()).unwrap());
 
     let vk = VerifyingKey::<Bn254>::deserialize_uncompressed_unchecked(verifying_key.as_slice()).expect("Error deserializing verifying key");
@@ -336,15 +314,6 @@ fn build_verifier(proof_bytes: Vec<u8>, public_inputs: Vec<u8>, verifying_key: V
         vk_gamma_g2: groth_vk.vk_gamma_g2,
         vk_delta_g2: groth_vk.vk_delta_g2,
     };
-
-
-    // Log custom verifier inputs
-    println!("Custom Verifier:");
-
-    // println!("Public Input: {:?}", public_inputs);
-    println!("Proof A: {:?}", proof_a);
-    println!("Proof B: {:?}", proof_b);
-    println!("Proof C: {:?}", proof_c);
 
     let verifier: Groth16VerifierPrepared = Groth16VerifierPrepared::new(
         proof_a,
