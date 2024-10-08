@@ -12,7 +12,7 @@ use solana_svm::account_loader::{LoadedTransaction, TransactionLoadResult};
 use solana_svm::transaction_processor::{LoadAndExecuteSanitizedTransactionsOutput, TransactionProcessingConfig, TransactionProcessingEnvironment};
 use solana_svm::transaction_results::TransactionExecutionResult;
 use state::account_state::AccountState;
-use state::state_record::StateRecord;
+use state::state_record::{StateCommitmentPackage, StateRecord};
 use state::transaction::TrollupTransaction;
 use state_commitment::state_commitment_pool::{StateCommitmentPool, StatePool};
 use state_management::account_loader::TrollupAccountLoader;
@@ -23,7 +23,6 @@ use lazy_static::lazy_static;
 use solana_program_runtime::log_collector::log::info;
 use tokio::sync::Mutex;
 use state::config::TrollupConfig;
-use state_commitment::state_commitment_layer::StateCommitmentPackage;
 
 lazy_static! {
     static ref CONFIG: TrollupConfig = TrollupConfig::build().unwrap();
@@ -141,6 +140,9 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
         if !successful_txs.is_empty() {
             let commitment_package = StateCommitmentPackage {
                 optimistic: false,
+                proof: vec![],
+                public_inputs: vec![],
+                verifying_key: vec![],
                 state_root: None,
                 state_records: account_states.clone(),
                 transactions: successful_txs,
@@ -154,6 +156,9 @@ impl<'a, A: ManageState<Record=AccountState>> ExecutionEngine<'a, A> {
         if !successful_optimistic_txs.is_empty() {
             let commitment_package = StateCommitmentPackage {
                 optimistic: true,
+                proof: vec![],
+                public_inputs: vec![],
+                verifying_key: vec![],
                 state_root: None,
                 state_records: account_states,
                 transactions: successful_optimistic_txs,

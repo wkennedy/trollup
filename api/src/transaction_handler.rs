@@ -43,12 +43,4 @@ impl <T: ManageState<Record=TrollupTransaction>> TransactionHandler<T> {
         Ok(json(&solana_txs))
     }
     
-    pub async fn challenge(&self) -> Result<impl Reply> {
-        let transactions = self.transaction_state_management.get_all_entries();
-        let mut solana_txs = Vec::with_capacity(transactions.len());
-        for (_, trollup_transaction) in transactions {
-            solana_txs.push(convert_to_solana_transaction(trollup_transaction).expect("TODO: panic message"));
-        }
-        Ok(json(&solana_txs))
-    }
 }

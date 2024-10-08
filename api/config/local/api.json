@@ -1,0 +1,443 @@
+{
+  "openapi" : "3.0.0",
+  "info" : {
+    "title" : "Trollup-Validator API",
+    "description" : "The Trollup API provides functionality to get and validate proofs",
+    "version" : "0.0.1"
+  },
+  "paths" : {
+    "/health" : {
+      "get" : {
+        "summary" : "Check the health of the service",
+        "tags" : [ "health" ],
+        "responses" : {
+          "200" : {
+            "description" : "Service is healthy"
+          },
+          "500" : {
+            "description" : "Service is unhealthy"
+          }
+        }
+      }
+    },
+    "/send-transaction" : {
+      "post" : {
+        "summary" : "Send a transaction",
+        "tags" : [ "transactions" ],
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/Transaction"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Transaction submitted successfully",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid transaction"
+          }
+        }
+      }
+    },
+    "/send-transaction-optimistic" : {
+      "post" : {
+        "summary" : "Send an optimistic transaction",
+        "tags" : [ "transactions" ],
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/Transaction"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Optimistic transaction submitted successfully",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid transaction"
+          }
+        }
+      }
+    },
+    "/get-account/{account_id}" : {
+      "get" : {
+        "summary" : "Get account details",
+        "tags" : [ "accounts" ],
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "account_id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Account details retrieved successfully",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AccountState"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Account not found"
+          }
+        }
+      }
+    },
+    "/get-all-accounts" : {
+      "get" : {
+        "summary" : "Get all accounts",
+        "tags" : [ "accounts" ],
+        "responses" : {
+          "200" : {
+            "description" : "All accounts retrieved successfully",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/AccountState"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get-transaction/{signature}" : {
+      "get" : {
+        "summary" : "Get transaction details",
+        "tags" : [ "transactions" ],
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "signature",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Transaction details retrieved successfully",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TrollupTransaction"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Transaction not found"
+          }
+        }
+      }
+    },
+    "/get-all-transactions" : {
+      "get" : {
+        "summary" : "Get all transactions",
+        "tags" : [ "transactions" ],
+        "responses" : {
+          "200" : {
+            "description" : "All transactions retrieved successfully",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/TrollupTransaction"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get-block/{block_id}" : {
+      "get" : {
+        "summary" : "Get block details",
+        "tags" : [ "blocks" ],
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "block_id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Block details retrieved successfully",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Block"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Block not found"
+          }
+        }
+      }
+    },
+    "/get-latest-block" : {
+      "get" : {
+        "summary" : "Get the latest block",
+        "tags" : [ "blocks" ],
+        "responses" : {
+          "200" : {
+            "description" : "Latest block retrieved successfully",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Block"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "No blocks exist"
+          }
+        }
+      }
+    },
+    "/get-all-blocks" : {
+      "get" : {
+        "summary" : "Get all blocks",
+        "tags" : [ "blocks" ],
+        "responses" : {
+          "200" : {
+            "description" : "All blocks retrieved successfully",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Block"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get-all-pending-commitments" : {
+      "get" : {
+        "summary" : "Get all pending commitments",
+        "tags" : [ "optimistic" ],
+        "responses" : {
+          "200" : {
+            "description" : "All pending commitments retrieved successfully",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/StateCommitmentPackage"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get-pending-commitments/{state_root}" : {
+      "get" : {
+        "summary" : "Get pending commitments for a specific state root",
+        "tags" : [ "optimistic" ],
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "state_root",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Pending commitments retrieved successfully",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StateCommitmentPackage"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "No pending commitments found for the given state root"
+          }
+        }
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "Transaction" : {
+        "type" : "object",
+        "properties" : {
+          "signatures" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "message" : {
+            "type" : "object",
+            "properties" : {
+              "accountKeys" : {
+                "type" : "array",
+                "items" : {
+                  "type" : "string"
+                }
+              },
+              "recentBlockhash" : {
+                "type" : "string"
+              },
+              "instructions" : {
+                "type" : "array",
+                "items" : {
+                  "type" : "object",
+                  "properties" : {
+                    "programIdIndex" : {
+                      "type" : "integer"
+                    },
+                    "accounts" : {
+                      "type" : "array",
+                      "items" : {
+                        "type" : "integer"
+                      }
+                    },
+                    "data" : {
+                      "type" : "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "TrollupTransaction" : {
+        "type" : "object",
+        "properties" : {
+          "signature" : {
+            "type" : "string"
+          },
+          "transaction" : {
+            "$ref" : "#/components/schemas/Transaction"
+          },
+          "optimistic" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "AccountState" : {
+        "type" : "object",
+        "properties" : {
+          "address" : {
+            "type" : "string"
+          },
+          "balance" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "Block" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "transactions" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TrollupTransaction"
+            }
+          }
+        }
+      },
+      "StateCommitmentPackage" : {
+        "type" : "object",
+        "properties" : {
+          "optimistic" : {
+            "type" : "boolean"
+          },
+          "state_root" : {
+            "type" : "string"
+          },
+          "state_records" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AccountState"
+            }
+          },
+          "transactions" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TrollupTransaction"
+            }
+          },
+          "transaction_ids" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags" : [ {
+    "name" : "health",
+    "description" : "Health check endpoint"
+  }, {
+    "name" : "transactions",
+    "description" : "Transaction management endpoints"
+  }, {
+    "name" : "accounts",
+    "description" : "Account management endpoints"
+  }, {
+    "name" : "blocks",
+    "description" : "Block management endpoints"
+  }, {
+    "name" : "optimistic",
+    "description" : "Optimistic transaction handling endpoints"
+  } ]
+}

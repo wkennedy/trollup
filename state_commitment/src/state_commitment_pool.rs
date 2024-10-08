@@ -1,5 +1,4 @@
-use crate::state_commitment_layer::StateCommitmentPackage;
-use state::state_record::StateRecord;
+use state::state_record::{StateCommitmentPackage, StateRecord};
 use std::collections::VecDeque;
 
 pub trait StatePool {

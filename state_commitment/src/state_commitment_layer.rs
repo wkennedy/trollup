@@ -1,13 +1,15 @@
 use crate::state_commitment_layer::CommitmentResultType::{OnChain, TimeOut};
 use crate::state_commitment_pool::{StateCommitmentPool, StatePool};
 use crate::validator_client::ValidatorClient;
-use ark_serialize::CanonicalSerialize;
+use ark_serialize::{CanonicalSerialize, Compress};
+use base64::{engine::general_purpose, Engine as _};
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use futures_util::{SinkExt, StreamExt};
 use lazy_static::lazy_static;
 use log::info;
 use rs_merkle::algorithms::Sha256;
 use rs_merkle::{Hasher, MerkleTree};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::Digest;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -19,7 +21,7 @@ use solana_transaction_status::UiTransactionEncoding;
 use state::account_state::AccountState;
 use state::block::Block;
 use state::config::TrollupConfig;
-use state::state_record::StateRecord;
+use state::state_record::{StateCommitmentPackage, StateRecord};
 use state::transaction::TrollupTransaction;
 use state_management::state_management::{ManageState, StateManager};
 use std::collections::HashMap;
@@ -54,6 +56,11 @@ struct CommitmentProcessorMessage {
     processor_type: CommitmentResultType,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct PdaListenerMessage {
+    state_root: [u8; 32],
+}
+
 #[derive(Clone, Debug)]
 struct CommitmentEntry<S: StateRecord + Clone> {
     package: StateCommitmentPackage<S>,
@@ -65,57 +72,6 @@ enum CommitterState {
     Running,
     Stopped,
     Initialized,
-}
-
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
-pub struct StateCommitmentPackage<S: StateRecord> {
-    pub optimistic: bool,
-    pub state_root: Option<[u8; 32]>,
-    pub state_records: Vec<S>,
-    pub transactions: Vec<TrollupTransaction>,
-    pub transaction_ids: Vec<[u8; 32]>,
-}
-
-impl<S: StateRecord> StateRecord for StateCommitmentPackage<S> {
-    fn get_key(&self) -> [u8; 32] {
-        self.state_root
-            .expect("No state_root set for this record. The state_root is the key for this record.")
-    }
-}
-
-// #[derive(Clone, Debug)]
-// pub struct StateCommitmentPackage<S: StateRecord> {
-//     pub optimistic: bool,
-//     pub state_records: Vec<S>,
-//     pub transactions: Vec<TrollupTransaction>,
-//     pub transaction_ids: Vec<[u8; 32]>,
-// }
-
-impl<S: StateRecord> StateCommitmentPackage<S> {
-    pub fn new(
-        optimistic: bool,
-        state_records: Vec<S>,
-        transactions: Vec<TrollupTransaction>,
-        transaction_ids: Vec<[u8; 32]>,
-    ) -> Self {
-        StateCommitmentPackage {
-            optimistic,
-            state_root: None,
-            state_records,
-            transactions,
-            transaction_ids,
-        }
-    }
-
-    pub fn hash(state_records: Vec<S>) -> [u8; 32] {
-        let mut hasher = sha2::Sha256::new();
-
-        for state_record in state_records {
-            hasher.update(to_vec(&state_record).unwrap());
-        }
-        let hash: [u8; 32] = hasher.finalize().into();
-        hash
-    }
 }
 
 pub trait StateCommitter<T: StateRecord> {
@@ -241,17 +197,26 @@ impl<
                     let account_states = &commitment_package.state_records;
 
                     tree_composite.add_states(account_states);
-                    let (_proof_package_lite, proof_package_prepared, proof_package) =
+                    let (proof_package_lite, proof_package_prepared, proof_package) =
                         generate_proof_load_keys(account_states.clone());
 
                     let account_state_root = tree_composite
                         .get_uncommitted_root()
                         .expect("Error getting account state root");
 
+                    let mut proof_compressed =
+                        Vec::with_capacity(proof_package.proof.serialized_size(Compress::Yes));
+                    proof_package
+                        .proof
+                        .serialize_compressed(&mut proof_compressed)
+                        .expect("Error serializing and compressing proof");
                     // self.handle_optimistic_transactions(optimistic_txs, account_states.clone(), account_state_root);
                     info!("Adding optimistic commitment to opti-q");
                     let pending_state_commitment_package = StateCommitmentPackage {
                         optimistic: true,
+                        proof: proof_package_prepared.proof,
+                        public_inputs: proof_package_prepared.public_inputs,
+                        verifying_key: proof_package_lite.verifying_key,
                         state_root: Some(account_state_root),
                         state_records: commitment_package.state_records,
                         transactions: commitment_package.transactions,
@@ -399,15 +364,15 @@ impl<
         self.block_state_management.commit();
     }
 
-    async fn start_pda_listener(&self, sender: Sender<Value>) {
+    async fn start_pda_listener(&self, pda_sender: Sender<PdaListenerMessage>) {
         let program_pubkey =
             Pubkey::from_str(&CONFIG.proof_verifier_program_id).expect("Invalid program ID");
-        let sender = sender.clone();
+        let pda_sender = pda_sender.clone();
 
         // Start the PDA listener in a new thread
         tokio::spawn(async move {
             let mut pda_listener = PdaListener::new(program_pubkey);
-            if let Err(e) = pda_listener.start(sender).await {
+            if let Err(e) = pda_listener.start(pda_sender).await {
                 eprintln!("PDA listener error: {:?}", e);
             }
         });
@@ -436,7 +401,7 @@ impl<
 
     pub async fn start_optimistic_commitment_processor(
         &self,
-        mut pda_receiver: mpsc::Receiver<Value>,
+        mut pda_receiver: mpsc::Receiver<PdaListenerMessage>,
         optimistic_processor_sender: Sender<CommitmentProcessorMessage>,
     ) {
         info!("Starting start_optimistic_commitment_processor");
@@ -446,18 +411,18 @@ impl<
         tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    Some(value) = pda_receiver.recv() => {
-                        // value.as_object();
+                    Some(pda_listener_message) = pda_receiver.recv() => {
+                        // let state_root = value.
                         // if success {
                         //     self.remove_commitment(&id).await;
                         // }
                         //
 
                             // self.verify_with_validator(s);
-                        info!("Value received from PDA: {:?}", value);
+                        info!("Value received from PDA: {:?}", pda_listener_message);
                         let read_guard = commitments.read().await;
                         //TODO get key from pda account details
-                        let entry = read_guard.get(&Pubkey::new_unique().to_bytes()).expect("");
+                        let entry = read_guard.get(&pda_listener_message.state_root).expect("");
                         optimistic_processor_sender.send(CommitmentProcessorMessage {processor_type: OnChain, state_root: entry.package.state_root.unwrap()}).await.expect("TODO: panic message");
 
                     }
@@ -518,12 +483,32 @@ impl<
                                 info!("Received from optimistic processor: {:?}", commitment_processor_message);
                                     match commitment_processor_message.processor_type {
 
-                                        OnChain => {}
+                                    //TODO clean this up
+                                        OnChain => {
+                                            let mut read_guard = commitments.read().await;
+                                            //TODO get key from pda account details
+                                            let entry = read_guard.get(&commitment_processor_message.state_root).expect("");
+                                            let mut tree_composite = TreeComposite::new();
+                                            tree_composite.add_transactions(&entry.package.transactions);
+
+                                            let account_states = &entry.package.state_records;
+
+                                            tree_composite.add_states(account_states);
+                                            let (_proof_package_lite, _proof_package_prepared, proof_package) =
+                                                generate_proof_load_keys(account_states.clone());
+
+                                            let account_state_root = tree_composite
+                                                .get_uncommitted_root()
+                                                .expect("Error getting account state root");
+                                            self.finalize(&mut tree_composite, entry.package.clone(), proof_package, account_state_root).await;
+                                            self.remove_commitment(&commitment_processor_message.state_root).await;
+                                        }
                                         TimeOut => {
-                                            let read_guard = commitments.read().await;
+                                            let mut read_guard = commitments.read().await;
                                             //TODO get key from pda account details
                                             let entry = read_guard.get(&commitment_processor_message.state_root).expect("");
                                             self.verify_with_validator(entry.package.clone()).await;
+                                            self.remove_commitment(&commitment_processor_message.state_root).await;
                                         }
                                     }
 
@@ -559,24 +544,30 @@ impl PdaListener {
         PdaListener { program_pubkey }
     }
 
-    pub async fn start(&mut self, tx: Sender<Value>) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn start(
+        &mut self,
+        pda_sender: Sender<PdaListenerMessage>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let url = Url::parse(&CONFIG.rpc_ws_current_env())?;
         let (ws_stream, _) = connect_async(url).await?;
         let (mut write, mut read) = ws_stream.split();
+        let (pda, _) = Pubkey::find_program_address(&[b"state"], &self.program_pubkey);
 
         // Construct the subscription request
-        let subscribe_request = json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "programSubscribe",
-            "params": [
-                self.program_pubkey.to_string(),
+        let subscribe_request = json!(
+            {
+              "jsonrpc": "2.0",
+              "id": 100,
+              "method": "accountSubscribe",
+              "params": [
+                pda.to_string(),
                 {
-                    "encoding": "jsonParsed",
-                    "commitment": "confirmed"
+                  "encoding": "base64",
+                  "commitment": "finalized"
                 }
-            ]
-        });
+              ]
+            }
+        );
 
         // Send the subscription request
         write
@@ -590,13 +581,32 @@ impl PdaListener {
                     let parsed: Value = serde_json::from_str(&text)?;
 
                     if let Some(method) = parsed.get("method") {
-                        if method == "programNotification" {
+                        if method == "accountNotification" {
                             if let Some(params) = parsed.get("params") {
                                 if let Some(result) = params.get("result") {
-                                    info!("PDA update received: {:?}", result);
-                                    // Send the update through the channel
-                                    //TODO
-                                    tx.send(json!({})).await.expect("TODO: panic message");
+                                    if let Some(value) = result.get("value") {
+                                        if let Some(data) = value.get("data") {
+                                            if let Some(data_str) = data.as_array() {
+                                                let decoded = general_purpose::STANDARD
+                                                    .decode(data_str[0].as_str().unwrap())?;
+                                                info!("Decoded account data: {:?}", decoded);
+                                                let pda_listener_message = PdaListenerMessage {
+                                                    state_root: <[u8; 32]>::try_from(decoded)
+                                                        .unwrap(),
+                                                };
+                                                pda_sender
+                                                    .send(pda_listener_message)
+                                                    .await
+                                                    .expect("TODO: panic message");
+                                            }
+                                            // info!("PDA update received: {:?}", data);
+                                            // // Send the update through the channel
+                                            // //TODO
+                                            // let vec = general_purpose::STANDARD.decode(data.to_string()).expect("TODO: panic message");
+                                            // info!("acct data len: {}", vec.len());
+                                            // pda_sender.send(json!({})).await.expect("TODO: panic message");
+                                        }
+                                    }
                                 }
                             }
                         }

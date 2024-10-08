@@ -58,17 +58,17 @@ impl<'a, A: ManageState<Record=AccountState>> TransactionProcessingCallback for 
     }
 
     fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
-        debug!("Getting shared account for {:?}", pubkey);
+        info!("Getting shared account for {:?}", pubkey);
 
         // Check cache first
         if let Some(account) = self.cache.read().unwrap().get(&pubkey.to_bytes()) {
-            debug!("Found in cache... shared account for {:?}", pubkey);
+            info!("Found in cache... shared account for {:?}", pubkey);
             return Some(account.clone());
         }
 
         // If not in cache, try to load from state management
         if let Some(account) = self.account_state_management.get_state_record(&pubkey.to_bytes()) {
-            debug!("Found in state management... shared account for {:?}", pubkey);
+            info!("Found in state management... shared account for {:?}", pubkey);
             let account_shared_data: AccountSharedData = account.into();
             self.cache.write().unwrap().insert(pubkey.to_bytes(), account_shared_data.clone());
             return Some(account_shared_data);
@@ -84,7 +84,7 @@ impl<'a, A: ManageState<Record=AccountState>> TransactionProcessingCallback for 
         }
 
         // If not found in state management, create a default account
-        debug!("Not found... creating default account for {:?}", pubkey);
+        info!("Not found... creating default account for {:?}", pubkey);
         // TODO for now all new accounts are owned by the System program, this will need to change
         let default_account = AccountSharedData::new(
             10000000000000,

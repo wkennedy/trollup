@@ -15,8 +15,8 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 #[derive(PartialEq, Eq, Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct ProofCommitmentPackage {
-    groth16_verifier_prepared: Groth16VerifierPrepared,
-    state_root: [u8; 32]
+    pub groth16_verifier_prepared: Groth16VerifierPrepared,
+    pub state_root: [u8; 32]
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, BorshSerialize, BorshDeserialize)]
