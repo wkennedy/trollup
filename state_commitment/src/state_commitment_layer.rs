@@ -6,7 +6,7 @@ use base64::{engine::general_purpose, Engine as _};
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use futures_util::{SinkExt, StreamExt};
 use lazy_static::lazy_static;
-use log::{error, info};
+use log::{debug, error, info};
 use rs_merkle::algorithms::Sha256;
 use rs_merkle::{Hasher, MerkleTree};
 use serde::{Deserialize, Serialize};
@@ -35,7 +35,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::error::RecvError;
 use tokio::sync::{mpsc, watch, Mutex, RwLock};
 use tokio::time::error::Elapsed;
-use tokio::time::{sleep, timeout, Instant};
+use tokio::time::{interval, sleep, timeout, Instant};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use trollup_zk::prove::{generate_proof_load_keys, setup, ProofPackage};
 use url::Url;
@@ -578,72 +578,86 @@ impl PdaListener {
         let (pda, _) = Pubkey::find_program_address(&[b"state"], &self.program_pubkey);
 
         // Construct the subscription request
-        let subscribe_request = json!(
-            {
-              "jsonrpc": "2.0",
-              "id": 100,
-              "method": "accountSubscribe",
-              "params": [
+        let subscribe_request = json!({
+            "jsonrpc": "2.0",
+            "id": 100,
+            "method": "accountSubscribe",
+            "params": [
                 pda.to_string(),
                 {
-                  "encoding": "base64",
-                  "commitment": "finalized"
+                    "encoding": "base64",
+                    "commitment": "finalized"
                 }
-              ]
-            }
-        );
+            ]
+        });
 
         // Send the subscription request
-        write
-            .send(Message::Text(subscribe_request.to_string()))
-            .await?;
+        write.send(Message::Text(subscribe_request.to_string())).await?;
 
-        // Handle incoming messages
-        while let Some(message) = read.next().await {
-            match message {
-                Ok(Message::Text(text)) => {
-                    let parsed: Value = serde_json::from_str(&text)?;
+        // Set up ping interval
+        let mut ping_interval = interval(Duration::from_secs(30));
+        let mut last_pong = tokio::time::Instant::now();
 
-                    if let Some(method) = parsed.get("method") {
-                        if method == "accountNotification" {
-                            if let Some(params) = parsed.get("params") {
-                                if let Some(result) = params.get("result") {
-                                    if let Some(value) = result.get("value") {
-                                        if let Some(data) = value.get("data") {
-                                            if let Some(data_str) = data.as_array() {
-                                                let decoded = general_purpose::STANDARD
-                                                    .decode(data_str[0].as_str().unwrap())?;
-                                                info!("Decoded account data: {:?}", decoded);
-                                                let pda_listener_message = PdaListenerMessage {
-                                                    state_root: <[u8; 32]>::try_from(decoded)
-                                                        .unwrap(),
-                                                };
-                                                pda_sender
-                                                    .send(pda_listener_message)
-                                                    .await
-                                                    .expect("Failed to send PDA message");
+        loop {
+            tokio::select! {
+                Some(message) = read.next() => {
+                    match message {
+                        Ok(Message::Text(text)) => {
+                            let parsed: Value = serde_json::from_str(&text)?;
+
+                            if let Some(method) = parsed.get("method") {
+                                if method == "accountNotification" {
+                                    if let Some(params) = parsed.get("params") {
+                                        if let Some(result) = params.get("result") {
+                                            if let Some(value) = result.get("value") {
+                                                if let Some(data) = value.get("data") {
+                                                    if let Some(data_str) = data.as_array() {
+                                                        let decoded = general_purpose::STANDARD
+                                                            .decode(data_str[0].as_str().unwrap())?;
+                                                        info!("Decoded account data: {:?}", decoded);
+                                                        let pda_listener_message = PdaListenerMessage {
+                                                            state_root: <[u8; 32]>::try_from(decoded).unwrap(),
+                                                        };
+                                                        if let Err(e) = pda_sender.send(pda_listener_message).await {
+                                                            error!("Failed to send PDA message: {:?}", e);
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
+                            } else if let Some(result) = parsed.get("result") {
+                                info!("Subscription confirmed: {:?}", result);
                             }
                         }
-                    } else if let Some(result) = parsed.get("result") {
-                        info!("Subscription confirmed: {:?}", result);
+                        Ok(Message::Pong(_)) => {
+                            debug!("Received pong");
+                            last_pong = tokio::time::Instant::now();
+                        }
+                        Ok(Message::Close(frame)) => {
+                            info!("WebSocket closed gracefully: {:?}", frame);
+                            return Ok(());
+                        }
+                        Ok(_) => {} // Ignore other message types
+                        Err(e) => {
+                            error!("WebSocket error: {:?}", e);
+                            return Err(Box::new(e));
+                        }
                     }
                 }
-                Ok(Message::Close(..)) => {
-                    info!("WebSocket closed gracefully");
-                    return Ok(());
+                _ = ping_interval.tick() => {
+                    if last_pong.elapsed() > Duration::from_secs(90) {
+                        error!("No pong received for 90 seconds, closing connection");
+                        return Ok(());
+                    }
+                    if let Err(e) = write.send(Message::Ping(vec![])).await {
+                        error!("Failed to send ping: {:?}", e);
+                        return Err(Box::new(e));
+                    }
+                    debug!("Sent ping");
                 }
-                Err(e) => {
-                    error!("WebSocket error: {:?}", e);
-                    return Err(Box::new(e));
-                }
-                _ => {}
             }
         }
-
-        Ok(())
     }
 }

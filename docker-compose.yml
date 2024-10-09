@@ -1,0 +1,19 @@
+version: '3.7'
+
+services:
+  trollup-api:
+    image: waggins/trollup-api:latest
+    tty: true
+    environment:
+      TROLLUP_CONFIG_PATH: /config/trollup-api-config.json
+      RUST_BACKTRACE: 1
+    ports:
+      - "27182:27182"
+  trollup-validator:
+    image: waggins/trollup-validator:latest
+    tty: true
+    environment:
+      TROLLUP_CONFIG_PATH: /config/trollup-api-config.json
+      RUST_BACKTRACE: 1
+    ports:
+      - "27183:27183"
