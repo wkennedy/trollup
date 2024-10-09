@@ -42,7 +42,7 @@ RUN --mount=type=bind,source=api,target=api \
     --mount=type=bind,source=example,target=example \
     --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
     --mount=type=bind,source=Cargo.lock,target=Cargo.lock \
-    --mount=type=bind,source=api/config/local,target=config/ \
+    --mount=type=bind,source=api/config/docker,target=config/ \
     --mount=type=cache,target=/app/target/ \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
     <<EOF

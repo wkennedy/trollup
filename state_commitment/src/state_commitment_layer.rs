@@ -6,7 +6,7 @@ use base64::{engine::general_purpose, Engine as _};
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use futures_util::{SinkExt, StreamExt};
 use lazy_static::lazy_static;
-use log::info;
+use log::{error, info};
 use rs_merkle::algorithms::Sha256;
 use rs_merkle::{Hasher, MerkleTree};
 use serde::{Deserialize, Serialize};
@@ -35,7 +35,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::error::RecvError;
 use tokio::sync::{mpsc, watch, Mutex, RwLock};
 use tokio::time::error::Elapsed;
-use tokio::time::{timeout, Instant};
+use tokio::time::{sleep, timeout, Instant};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use trollup_zk::prove::{generate_proof_load_keys, setup, ProofPackage};
 use url::Url;
@@ -57,7 +57,7 @@ struct CommitmentProcessorMessage {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct PdaListenerMessage {
+pub struct PdaListenerMessage {
     state_root: [u8; 32],
 }
 
@@ -548,6 +548,30 @@ impl PdaListener {
         &mut self,
         pda_sender: Sender<PdaListenerMessage>,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut retry_interval = Duration::from_secs(1);
+        let max_retry_interval = Duration::from_secs(60);
+
+        loop {
+            match self.connect_and_listen(&pda_sender).await {
+                Ok(_) => {
+                    // If we get here, the connection was closed gracefully
+                    info!("WebSocket connection closed. Attempting to reconnect...");
+                    retry_interval = Duration::from_secs(1);
+                }
+                Err(e) => {
+                    error!("WebSocket error: {:?}. Attempting to reconnect...", e);
+                }
+            }
+
+            // Wait before attempting to reconnect
+            sleep(retry_interval).await;
+
+            // Increase retry interval, but cap it at max_retry_interval
+            retry_interval = std::cmp::min(retry_interval * 2, max_retry_interval);
+        }
+    }
+
+    async fn connect_and_listen(&self, pda_sender: &Sender<PdaListenerMessage>) -> Result<(), Box<dyn std::error::Error>> {
         let url = Url::parse(&CONFIG.rpc_ws_current_env())?;
         let (ws_stream, _) = connect_async(url).await?;
         let (mut write, mut read) = ws_stream.split();
@@ -597,14 +621,8 @@ impl PdaListener {
                                                 pda_sender
                                                     .send(pda_listener_message)
                                                     .await
-                                                    .expect("TODO: panic message");
+                                                    .expect("Failed to send PDA message");
                                             }
-                                            // info!("PDA update received: {:?}", data);
-                                            // // Send the update through the channel
-                                            // //TODO
-                                            // let vec = general_purpose::STANDARD.decode(data.to_string()).expect("TODO: panic message");
-                                            // info!("acct data len: {}", vec.len());
-                                            // pda_sender.send(json!({})).await.expect("TODO: panic message");
                                         }
                                     }
                                 }
@@ -615,12 +633,12 @@ impl PdaListener {
                     }
                 }
                 Ok(Message::Close(..)) => {
-                    info!("WebSocket closed");
-                    break;
+                    info!("WebSocket closed gracefully");
+                    return Ok(());
                 }
                 Err(e) => {
-                    eprintln!("Error: {:?}", e);
-                    break;
+                    error!("WebSocket error: {:?}", e);
+                    return Err(Box::new(e));
                 }
                 _ => {}
             }
