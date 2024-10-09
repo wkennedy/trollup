@@ -86,8 +86,8 @@ sequenceDiagram
     Settlement->>Settlement: Generate proof
     Settlement->>Validator: Submit for validation
     Validator->>Validator: Verify state transition
-    Validator->>Settlement: Return signed approval
     Settlement->>MainChain: Submit new state root & signature
+    Validator->>Settlement: Return transaction signature
     MainChain->>MainChain: Verify validator's signature
     alt Signature is valid
         MainChain->>MainChain: Update state root
