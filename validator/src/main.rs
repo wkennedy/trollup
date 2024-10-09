@@ -23,10 +23,10 @@ type Result<T> = std::result::Result<T, Rejection>;
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
-
     let _ = TrollupConfig::load();
 
+    env_logger::init();
+    
     let api_doc_config = Arc::new(SwaggerConfig::from("/api-doc.json"));
 
     #[derive(OpenApi)]

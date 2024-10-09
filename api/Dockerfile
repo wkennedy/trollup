@@ -1,10 +1,10 @@
 # Use a slim Debian image for a smaller footprint
-FROM debian:bullseye-slim
+FROM debian:trixie-slim
 
 # Install OpenSSL and CA certificates
 # These are often required by Rust SSL/TLS libraries
 RUN apt-get update && \
-    apt-get install -y openssl ca-certificates && \
+    apt-get install -y openssl ca-certificates libssl-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user to run the application

@@ -39,9 +39,9 @@ lazy_static! {
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
-
     let _ = TrollupConfig::load();
+
+    env_logger::init();
     
     //Initialize our state managers. Currently only sled is implemented, but the idea is to use be able to use different DBs (RocksDB, etc...), but still utilize the StateManager as the interface
     let account_state_manager = Arc::new(StateManager::<SledStateManagement<AccountState>>::new(&CONFIG.account_state_manager_db_path));

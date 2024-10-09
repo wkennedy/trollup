@@ -1,4 +1,5 @@
 {
+  "RUST_LOG": "INFO",
   "SOLANA_ENVIRONMENT": "Dev",
   "TROLLUP_API_RPC_URL_DEV": "https://api.devnet.solana.com",
   "TROLLUP_API_RPC_URL_TEST": "https://api.testnet.solana.com",

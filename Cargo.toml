@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 
-members = [
-    "state", "state_commitment", "execution", "example", "state_management", "zk"]
+members = ["state", "state_commitment", "execution", "example", "state_management", "zk", "api", "validator"]
 
-exclude = ["api", "validator", "trollup-initialize-programs"]
+exclude = ["trollup-initialize-programs"]

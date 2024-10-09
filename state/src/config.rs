@@ -54,6 +54,7 @@ impl TrollupConfig {
             .build()?;
 
         // Set environment variables
+        set_env(&config, "RUST_LOG")?;
         set_env(&config, "SOLANA_ENVIRONMENT")?;
         set_env(&config, "TROLLUP_API_RPC_URL_DEV")?;
         set_env(&config, "TROLLUP_API_RPC_URL_TEST")?;
