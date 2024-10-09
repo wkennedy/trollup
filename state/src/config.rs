@@ -3,6 +3,8 @@ use config::{Config, File, FileFormat};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::{env, fs};
+use std::path::Path;
+use solana_sdk::signature::read_keypair_file;
 
 #[derive(Serialize, Deserialize, Default, Clone, PartialEq, Eq, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -100,8 +102,8 @@ impl TrollupConfig {
         rpc_ws.insert("Main".to_string(), env::var("TROLLUP_API_RPC_WS_MAIN").unwrap_or("wss://api.mainnet.solana.com".to_string()));
         rpc_ws.insert("Local".to_string(), env::var("TROLLUP_API_RPC_WS_LOCAL").unwrap_or("ws://localhost:8900".to_string()));
 
-        let trollup_validator_keypair: Vec<u8> = fs::read("/home/waggins/projects/trollup/api/config/local/keypair.json").expect("Keypair not configured");
-        let trollup_api_keypair: Vec<u8> = fs::read("/home/waggins/projects/trollup/api/config/local/keypair.json").expect("Keypair not configured");
+        let trollup_validator_keypair = read_keypair_file(Path::new(&env::var("TROLLUP_VALIDATOR_KEYPAIR_PATH").expect("TROLLUP_VALIDATOR_KEYPAIR_PATH not configured"))).expect("Keypair not configured").to_bytes().to_vec();
+        let trollup_api_keypair = read_keypair_file(Path::new(&env::var("TROLLUP_API_KEYPAIR_PATH").expect("TROLLUP_API_KEYPAIR_PATH not configured"))).expect("Keypair not configured").to_bytes().to_vec();
 
         Ok(TrollupConfig {
             rpc_urls,

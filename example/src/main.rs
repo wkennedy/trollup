@@ -240,8 +240,7 @@ async fn main() -> Result<()> {
 
     let commitment_packages = client.get_all_pending_commits_full().await.expect("TODO: panic message");
 
-    let trollup_api_keypair: Vec<u8> = fs::read("api/config/local/keypair.json").await.expect("Error loading keypair");
-    let payer = Keypair::from_bytes(trollup_api_keypair.as_slice()).unwrap();
+    let payer = Keypair::from_bytes(&CONFIG.trollup_api_keypair)?;
     // let payer = Keypair::new();
     // let airdrop_amount = 1_000_000; // 1 SOL in lamports
     // match request_airdrop(&rpc_client, &payer.pubkey(), airdrop_amount).await {
