@@ -48,7 +48,7 @@ pub struct TrollupConfig {
 impl TrollupConfig {
     
     pub fn load() -> Result<(), Box<dyn std::error::Error>> {
-        let config_path = env::var("TROLLUP_CONFIG_PATH").unwrap_or("/config/trollup-api-config.json".to_string()).to_string();
+        let config_path = env::var("TROLLUP_CONFIG_PATH").unwrap_or("/config/local/trollup-api-config.json".to_string()).to_string();
         let config = Config::builder()
             .add_source(File::new(&config_path, FileFormat::Json))
             .build()?;
@@ -100,8 +100,8 @@ impl TrollupConfig {
         rpc_ws.insert("Main".to_string(), env::var("TROLLUP_API_RPC_WS_MAIN").unwrap_or("wss://api.mainnet.solana.com".to_string()));
         rpc_ws.insert("Local".to_string(), env::var("TROLLUP_API_RPC_WS_LOCAL").unwrap_or("ws://localhost:8900".to_string()));
 
-        let trollup_validator_keypair: Vec<u8> = fs::read(env::var("TROLLUP_VALIDATOR_KEYPAIR_PATH").expect("Keypair not configured")).expect("Error loading keypair");
-        let trollup_api_keypair: Vec<u8> = fs::read(env::var("TROLLUP_API_KEYPAIR_PATH").expect("Keypair not configured")).expect("Error loading keypair");
+        let trollup_validator_keypair: Vec<u8> = fs::read("/home/waggins/projects/trollup/api/config/local/keypair.json").expect("Keypair not configured");
+        let trollup_api_keypair: Vec<u8> = fs::read("/home/waggins/projects/trollup/api/config/local/keypair.json").expect("Keypair not configured");
 
         Ok(TrollupConfig {
             rpc_urls,
