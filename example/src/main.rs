@@ -214,75 +214,77 @@ async fn main() -> Result<()> {
         },
     };
 
-    let send_result = client.send_transaction(&transaction).await?;
-    println!("Send transaction result: {}", send_result);
+    let send_result = client.send_transaction_optimistic(&transaction).await?;
+    println!("Send optimistic transaction result: {}", send_result);
 
     // Get transaction details
     let signature = "your_transaction_signature_here";
     let transaction_details = client.get_transaction(signature).await?;
     println!("Transaction details: {}", transaction_details);
-    // 
-    // tokio::time::sleep(Duration::from_secs(3)).await;
-    // 
-    // let account = client.get_all_accounts().await?;
+    
+    let account = client.get_all_accounts().await?;
     // println!("Account details: {}", account);
-    // 
-    // let block = client.get_all_blocks().await?;
+    
+    let block = client.get_all_blocks().await?;
     // println!("Block details: {}", block);
-    // 
-    // let transactions = client.get_all_transactions().await?;
+    
+    let transactions = client.get_all_transactions().await?;
     // println!("Transactions details: {}", transactions);
-    // 
-    // let pending_commits = client.get_all_pending_commits().await?;
-    // println!("Pending commits: {}", pending_commits);
-    // 
-    // let rpc_client = RpcClient::new_with_commitment(CONFIG.rpc_url_current_env().to_string(), CommitmentConfig::confirmed());
-    // 
-    // let commitment_packages = client.get_all_pending_commits_full().await.expect("TODO: panic message");
-    // 
-    // let payer = Keypair::from_bytes(&CONFIG.trollup_api_keypair)?;
-    // // let payer = Keypair::new();
-    // // let airdrop_amount = 1_000_000; // 1 SOL in lamports
-    // // match request_airdrop(&rpc_client, &payer.pubkey(), airdrop_amount).await {
-    // //     Ok(_) => println!("Airdrop successful!"),
-    // //     Err(err) => eprintln!("Airdrop failed: {}", err),
-    // // }
-    // 
-    // for commitment_package in commitment_packages {
-    //     let verifier_prepared = build_verifier(commitment_package.proof, commitment_package.public_inputs, commitment_package.verifying_key);
-    //     let proof_commitment_package = ProofCommitmentPackage {
-    //         groth16_verifier_prepared: verifier_prepared,
-    //         state_root: commitment_package.state_root.unwrap(),
-    //     };
-    //     // Serialize and encode the proof package
-    //     // let serialized_proof = to_vec(&proof_commitment_package).unwrap();
-    //     let program_id = Pubkey::from_str(&CONFIG.proof_verifier_program_id)?;
-    //     let instruction_data = to_vec(&ProgramInstruction::VerifyProof(proof_commitment_package)).unwrap();
-    //     let (pda, bump_seed) = Pubkey::find_program_address(&[b"state"], &program_id);
-    //     let instruction = Instruction::new_with_bytes(
-    //         program_id,
-    //         instruction_data.as_slice(),
-    //         vec![
-    //             AccountMeta::new(pda, false),  // PDA account (writable, not signer)
-    //         ],
-    //     );
-    // 
-    //     // Create and send the transaction
-    //     let recent_blockhash = rpc_client.get_latest_blockhash().await.unwrap();
-    //     let transaction = Transaction::new_signed_with_payer(
-    //         &[instruction],
-    //         Some(&payer.pubkey()),
-    //         &[&payer],
-    //         recent_blockhash,
-    //     );
-    // 
-    //     // Send and confirm transaction
-    //     match rpc_client.send_and_confirm_transaction_with_spinner(&transaction).await {
-    //         Ok(signature) => println!("Transaction succeeded! Signature: {}", signature),
-    //         Err(err) => println!("Transaction failed: {:?}", err),
-    //     }
-    // 
+    
+    let pending_commits = client.get_all_pending_commits().await?;
+    println!("Pending commits: {}", pending_commits);
+
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    
+    let rpc_client = RpcClient::new_with_commitment(CONFIG.rpc_url_current_env().to_string(), CommitmentConfig::confirmed());
+    
+    let commitment_packages = client.get_all_pending_commits_full().await.expect("TODO: panic message");
+    
+    let payer = Keypair::from_bytes(&CONFIG.trollup_api_keypair)?;
+    // let payer = Keypair::new();
+    // let airdrop_amount = 1_000_000; // 1 SOL in lamports
+    // match request_airdrop(&rpc_client, &payer.pubkey(), airdrop_amount).await {
+    //     Ok(_) => println!("Airdrop successful!"),
+    //     Err(err) => eprintln!("Airdrop failed: {}", err),
     // }
+    
+    for commitment_package in commitment_packages {
+        let verifier_prepared = build_verifier(commitment_package.proof, commitment_package.public_inputs, commitment_package.verifying_key);
+        let proof_commitment_package = ProofCommitmentPackage {
+            groth16_verifier_prepared: verifier_prepared,
+            state_root: commitment_package.state_root.unwrap(),
+        };
+        // Serialize and encode the proof package
+        // let serialized_proof = to_vec(&proof_commitment_package).unwrap();
+        let program_id = Pubkey::from_str(&CONFIG.proof_verifier_program_id)?;
+        let instruction_data = to_vec(&ProgramInstruction::VerifyProof(proof_commitment_package)).unwrap();
+        let (pda, bump_seed) = Pubkey::find_program_address(&[b"state"], &program_id);
+        let instruction = Instruction::new_with_bytes(
+            program_id,
+            instruction_data.as_slice(),
+            vec![
+                AccountMeta::new(pda, false),  // PDA account (writable, not signer)
+            ],
+        );
+    
+        // Create and send the transaction
+        let recent_blockhash = rpc_client.get_latest_blockhash().await.unwrap();
+        let transaction = Transaction::new_signed_with_payer(
+            &[instruction],
+            Some(&payer.pubkey()),
+            &[&payer],
+            recent_blockhash,
+        );
+
+        println!("Sending proof package to on-chain verifier...");
+
+        // Send and confirm transaction
+        match rpc_client.send_and_confirm_transaction_with_spinner(&transaction).await {
+            Ok(signature) => println!("Transaction succeeded! Signature: {}", signature),
+            Err(err) => println!("Transaction failed: {:?}", err),
+        }
+    
+    }
     
     Ok(())
 }
@@ -335,4 +337,235 @@ async fn request_airdrop(client: &RpcClient, pubkey: &Pubkey, amount: u64) -> st
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use std::env;
+    use std::str::FromStr;
+    use std::time::Duration;
+    use anyhow::Result;
+    use borsh::to_vec;
+    use solana_client::nonblocking::rpc_client::RpcClient;
+    use solana_program::pubkey::Pubkey;
+    use solana_program::system_instruction;
+    use solana_sdk::signature::{Keypair, Signer};
+    use solana_sdk::transaction::Transaction;
+    use solana_program::message::{Message, MessageHeader};
+    use solana_program::hash::Hash;
+    use solana_program::instruction::{AccountMeta, CompiledInstruction, Instruction};
+    use solana_sdk::commitment_config::CommitmentConfig;
+    use tokio::test;
+    use state::config::TrollupConfig;
+    use trollup_zk::verify_lite::ProofCommitmentPackage;
+    use crate::{build_verifier, ProgramInstruction, TrollupClient};
+    // Assuming TrollupClient and other necessary imports are available
+
+    #[tokio::test]
+    async fn test_health_check() -> Result<()> {
+        let client = TrollupClient::new();
+        let health_status = client.health_check().await?;
+        assert!(!health_status.is_empty(), "Health check should return a non-empty string");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_send_transaction() -> Result<()> {
+        let client = TrollupClient::new();
+        let sender = Keypair::new();
+        let recipient = Pubkey::new_unique();
+        let amount = 1_000_000; // 0.001 SOL
+
+        let instruction = system_instruction::transfer(
+            &sender.pubkey(),
+            &recipient,
+            amount,
+        );
+
+        let transaction = Transaction {
+            signatures: vec![sender.sign_message(&[0u8; 32]).into()],
+            message: Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    num_readonly_signed_accounts: 0,
+                    num_readonly_unsigned_accounts: 1,
+                },
+                account_keys: vec![sender.pubkey(), recipient, solana_sdk::system_program::id()],
+                recent_blockhash: Hash::default(),
+                instructions: vec![CompiledInstruction {
+                    program_id_index: 2,
+                    accounts: vec![0, 1],
+                    data: instruction.data.clone(),
+                }],
+            },
+        };
+
+        let send_result = client.send_transaction(&transaction).await?;
+        assert!(!send_result.is_empty(), "Send transaction should return a non-empty result");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_send_optimistic_transaction() -> Result<()> {
+        env::set_var("TROLLUP_CONFIG_PATH", "./config/local/trollup-api-config.json");
+        let _ = TrollupConfig::load();
+        let CONFIG = TrollupConfig::build().unwrap();
+
+        let client = TrollupClient::new();
+        let sender = Keypair::new();
+        let recipient = Pubkey::new_unique();
+        let amount = 1_000_000; // 0.001 SOL
+
+        let instruction = system_instruction::transfer(
+            &sender.pubkey(),
+            &recipient,
+            amount,
+        );
+
+        let transaction = Transaction {
+            signatures: vec![sender.sign_message(&[0u8; 32]).into()],
+            message: Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    num_readonly_signed_accounts: 0,
+                    num_readonly_unsigned_accounts: 1,
+                },
+                account_keys: vec![sender.pubkey(), recipient, solana_sdk::system_program::id()],
+                recent_blockhash: Hash::default(),
+                instructions: vec![CompiledInstruction {
+                    program_id_index: 2,
+                    accounts: vec![0, 1],
+                    data: instruction.data.clone(),
+                }],
+            },
+        };
+
+        let send_result = client.send_transaction_optimistic(&transaction).await?;
+        println!("Send transaction result: {}", send_result);
+
+        // Get transaction details
+        let signature = "your_transaction_signature_here";
+        let transaction_details = client.get_transaction(signature).await?;
+        println!("Transaction details: {}", transaction_details);
+
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
+        let account = client.get_all_accounts().await?;
+        println!("Account details: {}", account);
+
+        let block = client.get_all_blocks().await?;
+        println!("Block details: {}", block);
+
+        let transactions = client.get_all_transactions().await?;
+        println!("Transactions details: {}", transactions);
+
+        let pending_commits = client.get_all_pending_commits().await?;
+        println!("Pending commits: {}", pending_commits);
+
+        let rpc_client = RpcClient::new_with_commitment(CONFIG.rpc_url_current_env().to_string(), CommitmentConfig::confirmed());
+
+        let commitment_packages = client.get_all_pending_commits_full().await.expect("TODO: panic message");
+
+        let payer = Keypair::from_bytes(&CONFIG.trollup_api_keypair)?;
+        // let payer = Keypair::new();
+        // let airdrop_amount = 1_000_000; // 1 SOL in lamports
+        // match request_airdrop(&rpc_client, &payer.pubkey(), airdrop_amount).await {
+        //     Ok(_) => println!("Airdrop successful!"),
+        //     Err(err) => eprintln!("Airdrop failed: {}", err),
+        // }
+
+        for commitment_package in commitment_packages {
+            let verifier_prepared = build_verifier(commitment_package.proof, commitment_package.public_inputs, commitment_package.verifying_key);
+            let proof_commitment_package = ProofCommitmentPackage {
+                groth16_verifier_prepared: verifier_prepared,
+                state_root: commitment_package.state_root.unwrap(),
+            };
+            // Serialize and encode the proof package
+            // let serialized_proof = to_vec(&proof_commitment_package).unwrap();
+            let program_id = Pubkey::from_str(&CONFIG.proof_verifier_program_id)?;
+            let instruction_data = to_vec(&ProgramInstruction::VerifyProof(proof_commitment_package)).unwrap();
+            let (pda, bump_seed) = Pubkey::find_program_address(&[b"state"], &program_id);
+            let instruction = Instruction::new_with_bytes(
+                program_id,
+                instruction_data.as_slice(),
+                vec![
+                    AccountMeta::new(pda, false),  // PDA account (writable, not signer)
+                ],
+            );
+
+            // Create and send the transaction
+            let recent_blockhash = rpc_client.get_latest_blockhash().await.unwrap();
+            let transaction = Transaction::new_signed_with_payer(
+                &[instruction],
+                Some(&payer.pubkey()),
+                &[&payer],
+                recent_blockhash,
+            );
+
+            // Send and confirm transaction
+            match rpc_client.send_and_confirm_transaction_with_spinner(&transaction).await {
+                Ok(signature) => println!("Transaction succeeded! Signature: {}", signature),
+                Err(err) => println!("Transaction failed: {:?}", err),
+            }
+
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_transaction() -> Result<()> {
+        let client = TrollupClient::new();
+        let signature = "your_transaction_signature_here";
+        let transaction_details = client.get_transaction(signature).await?;
+        assert!(!transaction_details.is_empty(), "Transaction details should not be empty");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_all_accounts() -> Result<()> {
+        let client = TrollupClient::new();
+        let accounts = client.get_all_accounts().await?;
+        assert!(!accounts.is_empty(), "All accounts should not be empty");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_all_blocks() -> Result<()> {
+        let client = TrollupClient::new();
+        let blocks = client.get_all_blocks().await?;
+        assert!(!blocks.is_empty(), "All blocks should not be empty");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_all_transactions() -> Result<()> {
+        let client = TrollupClient::new();
+        let transactions = client.get_all_transactions().await?;
+        assert!(!transactions.is_empty(), "All transactions should not be empty");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_all_pending_commits() -> Result<()> {
+        let client = TrollupClient::new();
+        let pending_commits = client.get_all_pending_commits().await?;
+        assert!(!pending_commits.is_empty(), "Pending commits should not be empty");
+        Ok(())
+    }
+
+    // Additional test for get_all_pending_commits_full if needed
+    // #[tokio::test]
+    // async fn test_get_all_pending_commits_full() -> Result<()> {
+    //     let client = TrollupClient::new();
+    //     let commitment_packages = client.get_all_pending_commits_full().await?;
+    //     assert!(!commitment_packages.is_empty(), "Commitment packages should not be empty");
+    //     Ok(())
+    // }
+
+    // Helper function for build_verifier test if needed
+    // fn build_verifier_test_helper() -> Result<()> {
+    //     // Implement test logic for build_verifier function
+    //     // This might involve creating mock data for proof, public inputs, and verifying key
+    //     Ok(())
+    // }
 }
