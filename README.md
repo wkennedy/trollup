@@ -127,11 +127,14 @@ cd validator
 cargo run
 ```
 
-With Docker:
+With Docker (This will start a Trollup API and Validator server instance):
 
 ```shell
 docker-compose -f docker-compose.yml
 ```
+
+
+With the api and the validator running, you can run the tests in example/src/main.rs or run main itself to see an example of an optimisitc transaction.
 
 ```shell
 cd example
