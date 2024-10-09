@@ -214,75 +214,75 @@ async fn main() -> Result<()> {
         },
     };
 
-    let send_result = client.send_transaction_optimistic(&transaction).await?;
+    let send_result = client.send_transaction(&transaction).await?;
     println!("Send transaction result: {}", send_result);
 
     // Get transaction details
     let signature = "your_transaction_signature_here";
     let transaction_details = client.get_transaction(signature).await?;
     println!("Transaction details: {}", transaction_details);
-
-    tokio::time::sleep(Duration::from_secs(3)).await;
-
-    let account = client.get_all_accounts().await?;
-    println!("Account details: {}", account);
-    
-    let block = client.get_all_blocks().await?;
-    println!("Block details: {}", block);
-    
-    let transactions = client.get_all_transactions().await?;
-    println!("Transactions details: {}", transactions);
-
-    let pending_commits = client.get_all_pending_commits().await?;
-    println!("Pending commits: {}", pending_commits);
-
-    let rpc_client = RpcClient::new_with_commitment(CONFIG.rpc_url_current_env().to_string(), CommitmentConfig::confirmed());
-
-    let commitment_packages = client.get_all_pending_commits_full().await.expect("TODO: panic message");
-
-    let payer = Keypair::from_bytes(&CONFIG.trollup_api_keypair)?;
-    // let payer = Keypair::new();
-    // let airdrop_amount = 1_000_000; // 1 SOL in lamports
-    // match request_airdrop(&rpc_client, &payer.pubkey(), airdrop_amount).await {
-    //     Ok(_) => println!("Airdrop successful!"),
-    //     Err(err) => eprintln!("Airdrop failed: {}", err),
+    // 
+    // tokio::time::sleep(Duration::from_secs(3)).await;
+    // 
+    // let account = client.get_all_accounts().await?;
+    // println!("Account details: {}", account);
+    // 
+    // let block = client.get_all_blocks().await?;
+    // println!("Block details: {}", block);
+    // 
+    // let transactions = client.get_all_transactions().await?;
+    // println!("Transactions details: {}", transactions);
+    // 
+    // let pending_commits = client.get_all_pending_commits().await?;
+    // println!("Pending commits: {}", pending_commits);
+    // 
+    // let rpc_client = RpcClient::new_with_commitment(CONFIG.rpc_url_current_env().to_string(), CommitmentConfig::confirmed());
+    // 
+    // let commitment_packages = client.get_all_pending_commits_full().await.expect("TODO: panic message");
+    // 
+    // let payer = Keypair::from_bytes(&CONFIG.trollup_api_keypair)?;
+    // // let payer = Keypair::new();
+    // // let airdrop_amount = 1_000_000; // 1 SOL in lamports
+    // // match request_airdrop(&rpc_client, &payer.pubkey(), airdrop_amount).await {
+    // //     Ok(_) => println!("Airdrop successful!"),
+    // //     Err(err) => eprintln!("Airdrop failed: {}", err),
+    // // }
+    // 
+    // for commitment_package in commitment_packages {
+    //     let verifier_prepared = build_verifier(commitment_package.proof, commitment_package.public_inputs, commitment_package.verifying_key);
+    //     let proof_commitment_package = ProofCommitmentPackage {
+    //         groth16_verifier_prepared: verifier_prepared,
+    //         state_root: commitment_package.state_root.unwrap(),
+    //     };
+    //     // Serialize and encode the proof package
+    //     // let serialized_proof = to_vec(&proof_commitment_package).unwrap();
+    //     let program_id = Pubkey::from_str(&CONFIG.proof_verifier_program_id)?;
+    //     let instruction_data = to_vec(&ProgramInstruction::VerifyProof(proof_commitment_package)).unwrap();
+    //     let (pda, bump_seed) = Pubkey::find_program_address(&[b"state"], &program_id);
+    //     let instruction = Instruction::new_with_bytes(
+    //         program_id,
+    //         instruction_data.as_slice(),
+    //         vec![
+    //             AccountMeta::new(pda, false),  // PDA account (writable, not signer)
+    //         ],
+    //     );
+    // 
+    //     // Create and send the transaction
+    //     let recent_blockhash = rpc_client.get_latest_blockhash().await.unwrap();
+    //     let transaction = Transaction::new_signed_with_payer(
+    //         &[instruction],
+    //         Some(&payer.pubkey()),
+    //         &[&payer],
+    //         recent_blockhash,
+    //     );
+    // 
+    //     // Send and confirm transaction
+    //     match rpc_client.send_and_confirm_transaction_with_spinner(&transaction).await {
+    //         Ok(signature) => println!("Transaction succeeded! Signature: {}", signature),
+    //         Err(err) => println!("Transaction failed: {:?}", err),
+    //     }
+    // 
     // }
-    
-    for commitment_package in commitment_packages {
-        let verifier_prepared = build_verifier(commitment_package.proof, commitment_package.public_inputs, commitment_package.verifying_key);
-        let proof_commitment_package = ProofCommitmentPackage {
-            groth16_verifier_prepared: verifier_prepared,
-            state_root: commitment_package.state_root.unwrap(),
-        };
-        // Serialize and encode the proof package
-        // let serialized_proof = to_vec(&proof_commitment_package).unwrap();
-        let program_id = Pubkey::from_str(&CONFIG.proof_verifier_program_id)?;
-        let instruction_data = to_vec(&ProgramInstruction::VerifyProof(proof_commitment_package)).unwrap();
-        let (pda, bump_seed) = Pubkey::find_program_address(&[b"state"], &program_id);
-        let instruction = Instruction::new_with_bytes(
-            program_id,
-            instruction_data.as_slice(),
-            vec![
-                AccountMeta::new(pda, false),  // PDA account (writable, not signer)
-            ],
-        );
-
-        // Create and send the transaction
-        let recent_blockhash = rpc_client.get_latest_blockhash().await.unwrap();
-        let transaction = Transaction::new_signed_with_payer(
-            &[instruction],
-            Some(&payer.pubkey()),
-            &[&payer],
-            recent_blockhash,
-        );
-
-        // Send and confirm transaction
-        match rpc_client.send_and_confirm_transaction_with_spinner(&transaction).await {
-            Ok(signature) => println!("Transaction succeeded! Signature: {}", signature),
-            Err(err) => println!("Transaction failed: {:?}", err),
-        }
-
-    }
     
     Ok(())
 }
