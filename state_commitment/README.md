@@ -6,75 +6,75 @@ The Trollup State Commitment Library is a crucial component of the Trollup netwo
 
 ## Key Components
 
-### 1. StateCommitmentPackage
+### 1. StateCommitment
 
-```rust
-pub struct StateCommitmentPackage<S: StateRecord> {
-    pub state_records: Vec<S>,
-    pub transactions: Vec<TrollupTransaction>,
-    pub transaction_ids: Vec<[u8; 32]>,
-}
-```
+The core struct that manages the state commitment process.
 
-`StateCommitmentPackage` represents a bundle of state changes, including updated state records, transactions, and transaction IDs. It provides methods for creation and hashing of state records.
+#### Key Methods:
+- `new()`: Creates a new StateCommitment instance.
+- `read_from_pool()`: Reads pending commitments from the pool.
+- `verify_with_validator()`: Sends commitments to a validator for verification.
+- `finalize()`: Finalizes a commitment after successful validation.
+- `start_optimistic_commitment_processor()`: Manages optimistic transactions.
 
-### 2. StateCommitter Trait
+### 2. PdaListener
 
-```rust
-pub trait StateCommitter<T: StateRecord> {
-    fn add_states(&mut self, state_records: &Vec<T>);
-    fn add_transactions(&mut self, transactions: &Vec<TrollupTransaction>);
-    fn get_leaf_index(&self, id: &[u8; 32]) -> Option<usize>;
-    fn get_root(&self) -> Option<[u8; 32]>;
-    fn get_uncommitted_root(&self) -> Option<[u8; 32]>;
-    fn start(&mut self) -> impl Future<Output=()>;
-    fn stop(&mut self) -> impl Future<Output=()>;
-}
-```
+Listens for updates to a Program Derived Address (PDA) on the Solana blockchain.
 
-The `StateCommitter` trait defines the interface for state commitment operations, including adding states and transactions, retrieving Merkle tree information, and controlling the commitment process.
+#### Key Methods:
+- `new()`: Creates a new PdaListener.
+- `start()`: Starts the listening process with automatic reconnection.
+- `connect_and_listen()`: Establishes a WebSocket connection and processes messages.
 
-### 3. StateCommitment Struct
+### 3. TreeComposite
 
-```rust
-pub struct StateCommitment<'a, A: ManageState<Record=AccountState>, B: ManageState<Record=Block>, T: ManageState<Record=TrollupTransaction>> {
-    // Fields omitted for brevity
-}
-```
+Manages Merkle trees for state and transactions.
 
-`StateCommitment` is the main struct implementing the `StateCommitter` trait. It manages the state commitment process, including Merkle tree updates, interaction with the validator, and persistence of state changes.
+#### Key Methods:
+- `new()`: Creates a new TreeComposite.
+- `add_states()`: Adds account states to the state tree.
+- `add_transactions()`: Adds transactions to the transaction tree.
+- `get_root()` and `get_uncommitted_root()`: Retrieve the current and uncommitted roots.
 
-### 4. StatePool Trait and StateCommitmentPool
+### 4. StateCommitmentPool
 
-```rust
-pub trait StatePool {
-    type Record: StateRecord;
-    fn new() -> Self;
-    fn add(&mut self, package: StateCommitmentPackage<Self::Record>);
-    fn get_next(&mut self) -> Option<StateCommitmentPackage<Self::Record>>;
-    fn pool_size(&self) -> usize;
-    fn get_next_chunk(&mut self, chunk: u32) -> Vec<StateCommitmentPackage<Self::Record>>;
-}
+A queue-like structure for managing pending state commitments.
 
-pub struct StateCommitmentPool<S: StateRecord> {
-    pool: VecDeque<StateCommitmentPackage<S>>,
-}
-```
-
-`StatePool` defines the interface for a pool of state commitment packages, while `StateCommitmentPool` provides a concrete implementation using a `VecDeque`.
+#### Key Methods:
+- `new()`: Creates a new StateCommitmentPool.
+- `add()`: Adds a new commitment package to the pool.
+- `get_next()`: Retrieves the next commitment package.
+- `get_next_chunk()`: Retrieves a chunk of commitment packages.
 
 ### 5. ValidatorClient
 
-```rust
-pub struct ValidatorClient {
-    client: Client,
-    base_url: String,
-}
-```
+Handles communication with the validator service.
 
 `ValidatorClient` is responsible for communicating with the validator node, sending proofs for verification, and receiving responses.
 
 ## Key Processes
+
+1. **State Commitment**:
+   - Reads commitments from the pool.
+   - For optimistic transactions, adds them to a separate queue.
+   - For regular transactions, sends them to the validator for verification.
+
+2. **Optimistic Transactions**:
+   - Processed separately and faster.
+   - If not verified on-chain within a timeout, they're processed through the regular flow.
+
+3. **Validation**:
+   - Proofs are generated and sent to an off-chain validator.
+   - Validated state changes are then committed on-chain.
+
+4. **Finalization**:
+   - After successful validation, state changes are finalized.
+   - New blocks are created and saved.
+
+5. **PDA Listening**:
+   - Continuously listens for updates to a specific PDA on Solana.
+   - Uses WebSocket connection with automatic reconnection and ping/pong mechanism.
+
 
 ### State Commitment Process
 
@@ -91,27 +91,9 @@ pub struct ValidatorClient {
 
 The library uses `rs_merkle` to manage Merkle trees for both state and transactions, allowing for efficient verification of state changes.
 
-### Zero-Knowledge Proof Integration
+## Customization
 
-The library integrates with a zero-knowledge proof system (presumably implemented in `trollup_zk::prove`) to generate proofs for state changes.
-
-## Error Handling
-
-The library uses `anyhow::Result` for flexible error handling, particularly in the `ValidatorClient` implementation.
-
-## Asynchronous Operations
-
-The library makes extensive use of Rust's async/await syntax, particularly in the `StateCommitter` trait and `ValidatorClient` implementation.
-
-## Future Improvements
-
-1. Implement more comprehensive error handling and propagation.
-2. Add logging throughout the state commitment process for better debugging and monitoring.
-3. Implement retries and backoff strategies for validator communication.
-4. Add more comprehensive unit and integration tests.
-5. Optimize the state commitment process for larger state changes.
-6. Implement a more sophisticated mechanism for handling failed validations.
-7. Add configuration options for tuning performance (e.g., Merkle tree depth, polling intervals).
+The library uses generic types extensively, allowing for customization of the exact state records and management systems used. Implement the required traits (`StateRecord`, `ManageState`, etc.) to adapt the library to your specific needs.
 
 ## Conclusion
 
