@@ -2,6 +2,8 @@
 
 [![Rust](https://github.com/wkennedy/trollup/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/wkennedy/trollup/actions/workflows/rust.yml)
 
+[[Watch the demo]](https://youtu.be/-Mq6JiJv0HA)
+
 ### **Overview:**
 
 The unique aspect of Trollup is its flexibility in handling transactions. It allows for quick finality through on-chain verification for optimistic transactions, while still maintaining the security of ZK proofs and the option for off-chain validation.
